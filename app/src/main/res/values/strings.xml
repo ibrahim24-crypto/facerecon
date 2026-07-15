@@ -1,0 +1,69 @@
+<resources>
+    <string name="app_name">face recon</string>
+    <string name="app_title">FaceRecognition</string>
+    <string name="tab_camera">Camera</string>
+    <string name="tab_register">Register</string>
+    <string name="register_face">Register Face</string>
+    <string name="enter_name">Enter name</string>
+    <string name="name">Name</string>
+    <string name="capture">Capture</string>
+    <string name="add_another_face">Add another face</string>
+    <string name="training_empty">No face detected. Please try again.</string>
+    <string name="training_success">Face registered successfully!</string>
+    <string name="who_is_this">Who is this?</string>
+    <string name="enroll">Enroll</string>
+    <string name="ignore">Ignore</string>
+    <string name="manage_faces">Manage Faces</string>
+    <string name="toggle_theme">Toggle theme</string>
+    <string name="no_enrolled_faces">No enrolled faces yet</string>
+    <string name="enrolled_samples">%1$d enrolled sample(s)</string>
+    <string name="add_new_face">Add new face</string>
+    <string name="delete_person">Delete person</string>
+    <string name="search_faces">Search by name</string>
+    <string name="edit_name">Edit name</string>
+    <string name="rename_person">Rename person</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="exit_app">Exit app?</string>
+    <string name="exit_app_message">Are you sure you want to exit?</string>
+    <string name="exit">Exit</string>
+    <string name="review_captured_faces">Review captured faces</string>
+    <string name="submit_for_training">Submit for training</string>
+    <string name="discard_captures">Discard captures</string>
+    <string name="capture_unknown_hint">Enter a name for this new person, then submit.</string>
+    <string name="capture_known_hint">Add %1$s samples to the enrolled person.</string>
+    <string name="pick_image">Pick Image</string>
+    <string name="switch_camera">Switch Camera</string>
+    <string name="back_to_camera">Back to Camera</string>
+    <string name="front_camera">Front</string>
+    <string name="rear_camera">Rear</string>
+    <string name="image_load_error">Could not load image</string>
+    <string name="refresh">Refresh</string>
+    <string name="pick_video">Pick Video</string>
+    <string name="add_from_image">Add from image</string>
+    <string name="video_loading">Processing video…</string>
+    <string name="frame_indicator">Frame %1$d / %2$d</string>
+    <string name="prev_frame">Previous</string>
+    <string name="next_frame">Next</string>
+
+    <!-- New localized strings -->
+    <string name="show_face_index">Show face index</string>
+    <string name="auto_capture_label">Auto-capture recognized person</string>
+    <string name="auto_capture_interval_label">Interval: %1$d s</string>
+    <string name="capture_settings_title">Capture</string>
+    <string name="about_title">About</string>
+    <string name="developer_credit">Developer: Ibrahim Ezzine\nCo-authored-by: GitHub Copilot</string>
+
+    <!-- Language -->
+    <string name="language_title">Language</string>
+    <string name="language_system">System default</string>
+    <string name="language_en">English</string>
+    <string name="language_fr">Français</string>
+
+    <!-- About enhancements -->
+    <string name="about_version">Version %1$s</string>
+    <string name="about_tech_face">Face detection: ML Kit</string>
+    <string name="about_tech_recognition">Recognition: FaceNet TFLite</string>
+    <string name="about_tech_camera">Camera: CameraX</string>
+    <string name="about_tech_ui">UI: Jetpack Compose</string>
+</resources>

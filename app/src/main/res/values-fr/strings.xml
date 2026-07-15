@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">face recon</string>
+    <string name="app_title">ReconnaissanceFaciale</string>
+    <string name="tab_camera">Camera</string>
+    <string name="tab_register">Register</string>
+    <string name="show_face_index">Afficher index du visage</string>
+    <string name="auto_capture_label">Capture automatique si reconnu</string>
+    <string name="auto_capture_interval_label">Intervalle: %1$d s</string>
+    <string name="capture_settings_title">Capture</string>
+    <string name="about_title">A propos</string>
+    <string name="developer_credit">Developpeur : Ibrahim Ezzine&#10;Co-authored-by: GitHub Copilot</string>
+
+    <!-- Language -->
+    <string name="language_title">Langue</string>
+    <string name="language_system">Par defaut du systeme</string>
+    <string name="language_en">English</string>
+    <string name="language_fr">Francais</string>
+
+    <!-- About enhancements -->
+    <string name="about_version">Version %1$s</string>
+    <string name="about_tech_face">Detection : ML Kit</string>
+    <string name="about_tech_recognition">Reconnaissance : FaceNet TFLite</string>
+    <string name="about_tech_camera">Camera : CameraX</string>
+    <string name="about_tech_ui">Interface : Jetpack Compose</string>
+</resources>
