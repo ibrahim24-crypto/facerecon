@@ -23,26 +23,19 @@ import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.google.mlkit.vision.face.FaceDetection
-import com.google.mlkit.vision.face.FaceDetector
-import com.google.mlkit.vision.face.FaceDetectorOptions
 import java.util.Locale
 import java.util.concurrent.Executors
 
 class MainActivity : ComponentActivity() {
 
-    private lateinit var faceDetector: FaceDetector
+    private lateinit var faceDetector: BlazeFaceDetector
     private val cameraExecutor = Executors.newSingleThreadExecutor()
     private var cameraProvider: ProcessCameraProvider? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
-        val options = FaceDetectorOptions.Builder()
-            .setPerformanceMode(FaceDetectorOptions.PERFORMANCE_MODE_ACCURATE)
-            .setMinFaceSize(0.15f)
-            .build()
-        faceDetector = FaceDetection.getClient(options)
+        faceDetector = BlazeFaceDetector(this)
 
         setContent {
             val viewModel: MainViewModel = viewModel()

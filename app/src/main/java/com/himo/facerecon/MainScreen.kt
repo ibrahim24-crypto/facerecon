@@ -90,8 +90,6 @@ import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.face.FaceDetector
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -106,7 +104,7 @@ private val isProcessing = AtomicInteger(0)
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(
-    faceDetector: FaceDetector,
+    faceDetector: BlazeFaceDetector,
     cameraExecutor: ExecutorService,
     onCameraProviderReady: (ProcessCameraProvider) -> Unit,
     viewModel: MainViewModel = viewModel()
@@ -884,7 +882,7 @@ private fun ScanRosterCard(
 
 private fun processFrame(
     imageProxy: ImageProxy,
-    faceDetector: FaceDetector,
+    faceDetector: BlazeFaceDetector,
     faceRecognitionHelper: FaceRecognitionHelper,
     viewModel: MainViewModel
 ) {
@@ -907,163 +905,159 @@ private fun processFrame(
         val uprightBitmap = rotateBitmapForAnalysis(rgbaBitmap, rotationDegrees)
         viewModel.updateAnalysisResolution(uprightBitmap.width, uprightBitmap.height)
 
-        val inputImage = InputImage.fromBitmap(uprightBitmap, 0)
         val mode = viewModel.currentMode.value
         analysisStarted = true
 
-        faceDetector.process(inputImage)
-            .addOnSuccessListener { detectedFaces ->
+        viewModel.launchFrameWork {
+            val detectedFaces = try {
+                faceDetector.detect(uprightBitmap)
+            } catch (e: Exception) {
+                Log.e(TAG, "Face detection failed", e)
+                emptyList()
+            }
+
+            if (detectedFaces.isEmpty()) {
                 try {
-                    if (detectedFaces.isEmpty()) {
-                        viewModel.updateFaces(emptyList())
-                        viewModel.pruneFaceTracks(emptySet())
-                        viewModel.clearLastDetectedBitmap()
-                        isProcessing.set(0)
-                        return@addOnSuccessListener
-                    }
+                    viewModel.updateFaces(emptyList())
+                    viewModel.pruneFaceTracks(emptySet())
+                    viewModel.clearLastDetectedBitmap()
+                } finally {
+                    isProcessing.set(0)
+                    imageProxy.close()
+                }
+                return@launchFrameWork
+            }
 
-                    viewModel.launchFrameWork {
-                        val faceList = mutableListOf<FaceData>()
-                        try {
-                            for (face in detectedFaces) {
-                                try {
-                                    val bounds = face.boundingBox
-                                    val faceBitmap = cropBitmap(uprightBitmap, bounds) ?: continue
+            val faceList = mutableListOf<FaceData>()
+            try {
+                for (face in detectedFaces) {
+                    try {
+                        val bounds = face.bounds
+                        val faceBitmap = cropBitmap(uprightBitmap, bounds) ?: continue
 
-                                    when (mode) {
-                                        Mode.CAMERA, Mode.SCAN -> {
-                                            val embedding = faceRecognitionHelper.getEmbedding(faceBitmap)
-                                            val result = faceRecognitionHelper.recognize(embedding)
-                                            val faceId = FaceData.stableId(bounds)
-                                            val stableName = viewModel.stabilizeRecognition(faceId, result)
+                        when (mode) {
+                            Mode.CAMERA, Mode.SCAN -> {
+                                val embedding = faceRecognitionHelper.getEmbedding(faceBitmap)
+                                val result = faceRecognitionHelper.recognize(embedding)
+                                val faceId = FaceData.stableId(bounds)
+                                val stableName = viewModel.stabilizeRecognition(faceId, result)
 
-                                            if (stableName == "Unknown") {
-                                                faceList.add(
-                                                    FaceData(
-                                                        bounds = bounds,
-                                                        name = "Unknown",
-                                                        id = faceId,
-                                                        enrollmentBitmap = faceBitmap.copy(
-                                                            faceBitmap.config ?: Bitmap.Config.ARGB_8888,
-                                                            true
-                                                        ),
-                                                        enrollmentEmbedding = embedding.copyOf()
-                                                    )
-                                                )
-                                            } else {
-                                                faceList.add(
-                                                    FaceData(
-                                                        bounds = bounds,
-                                                        name = stableName,
-                                                        id = faceId,
-                                                        confidence = result.bestDistance
-                                                    )
-                                                )
-                                            }
+                                if (stableName == "Unknown") {
+                                    faceList.add(
+                                        FaceData(
+                                            bounds = bounds,
+                                            name = "Unknown",
+                                            id = faceId,
+                                            enrollmentBitmap = faceBitmap.copy(
+                                                faceBitmap.config ?: Bitmap.Config.ARGB_8888,
+                                                true
+                                            ),
+                                            enrollmentEmbedding = embedding.copyOf()
+                                        )
+                                    )
+                                } else {
+                                    faceList.add(
+                                        FaceData(
+                                            bounds = bounds,
+                                            name = stableName,
+                                            id = faceId,
+                                            confidence = result.bestDistance
+                                        )
+                                    )
+                                }
 
-                                            if (detectedFaces.size == 1) {
-                                                viewModel.tryCaptureBurstSample(
-                                                    faceId = faceId,
-                                                    stableName = stableName,
-                                                    bitmap = faceBitmap,
-                                                    embedding = embedding
-                                                )
-                                            }
+                                if (detectedFaces.size == 1) {
+                                    viewModel.tryCaptureBurstSample(
+                                        faceId = faceId,
+                                        stableName = stableName,
+                                        bitmap = faceBitmap,
+                                        embedding = embedding
+                                    )
+                                }
 
-                                            // Auto-capture for developer if enabled
-                                            viewModel.maybeAutoCapture(
-                                                faceId = faceId,
-                                                stableName = stableName,
-                                                bitmap = faceBitmap,
-                                                embedding = embedding
-                                            )
+                                // Auto-capture for developer if enabled
+                                viewModel.maybeAutoCapture(
+                                    faceId = faceId,
+                                    stableName = stableName,
+                                    bitmap = faceBitmap,
+                                    embedding = embedding
+                                )
 
-                                            // Capture face for roster enrollment
-                                            if (viewModel.rosterEnrollmentIndex.value >= 0) {
-                                                viewModel.updateLatestRosterFace(
-                                                    faceBitmap.copy(faceBitmap.config ?: Bitmap.Config.ARGB_8888, true),
-                                                    embedding.copyOf()
-                                                )
-                                            }
-                                        }
-                                        Mode.REGISTER -> {
-                                            val candidateBitmaps = mutableListOf<Bitmap>()
-                                            for (f in detectedFaces) {
-                                                val cropped = cropBitmap(uprightBitmap, f.boundingBox) ?: continue
-                                                candidateBitmaps.add(cropped)
-                                                faceList.add(
-                                                    FaceData(
-                                                        bounds = f.boundingBox,
-                                                        name = "",
-                                                        id = FaceData.stableId(f.boundingBox)
-                                                    )
-                                                )
-                                            }
-                                            withContext(Dispatchers.Main) {
-                                                viewModel.updateRegisterCandidates(candidateBitmaps)
-                                            }
-                                        }
-                                        Mode.ATTENDANCE -> {
-                                            val embedding = faceRecognitionHelper.getEmbedding(faceBitmap)
-                                            val result = faceRecognitionHelper.recognize(embedding)
-                                            val faceId = FaceData.stableId(bounds)
-                                            val stableName = viewModel.stabilizeRecognition(faceId, result)
-
-                                            if (stableName != "Unknown") {
-                                                viewModel.markAttendanceRecognized(stableName)
-                                            }
-
-                                            faceList.add(
-                                                FaceData(
-                                                    bounds = bounds,
-                                                    name = stableName,
-                                                    id = faceId,
-                                                    confidence = result.bestDistance
-                                                )
-                                            )
-
-                                            if (detectedFaces.size == 1 && stableName == "Unknown") {
-                                                viewModel.tryCaptureBurstSample(
-                                                    faceId = faceId,
-                                                    stableName = stableName,
-                                                    bitmap = faceBitmap,
-                                                    embedding = embedding
-                                                )
-                                            }
-
-                                            // also allow auto-capture during attendance
-                                            viewModel.maybeAutoCapture(
-                                                faceId = faceId,
-                                                stableName = stableName,
-                                                bitmap = faceBitmap,
-                                                embedding = embedding
-                                            )
-                                        }
-                                    }
-                                } catch (e: Exception) {
-                                    Log.e(TAG, "Failed to process a single face", e)
+                                // Capture face for roster enrollment
+                                if (viewModel.rosterEnrollmentIndex.value >= 0) {
+                                    viewModel.updateLatestRosterFace(
+                                        faceBitmap.copy(faceBitmap.config ?: Bitmap.Config.ARGB_8888, true),
+                                        embedding.copyOf()
+                                    )
                                 }
                             }
-                        } finally {
-                            withContext(Dispatchers.Main) {
-                                viewModel.pruneFaceTracks(faceList.map { it.id }.toSet())
-                                viewModel.updateFaces(faceList)
+                            Mode.REGISTER -> {
+                                val candidateBitmaps = mutableListOf<Bitmap>()
+                                for (f in detectedFaces) {
+                                    val cropped = cropBitmap(uprightBitmap, f.bounds) ?: continue
+                                    candidateBitmaps.add(cropped)
+                                    faceList.add(
+                                        FaceData(
+                                            bounds = f.bounds,
+                                            name = "",
+                                            id = FaceData.stableId(f.bounds)
+                                        )
+                                    )
+                                }
+                                withContext(Dispatchers.Main) {
+                                    viewModel.updateRegisterCandidates(candidateBitmaps)
+                                }
                             }
-                            isProcessing.set(0)
+                            Mode.ATTENDANCE -> {
+                                val embedding = faceRecognitionHelper.getEmbedding(faceBitmap)
+                                val result = faceRecognitionHelper.recognize(embedding)
+                                val faceId = FaceData.stableId(bounds)
+                                val stableName = viewModel.stabilizeRecognition(faceId, result)
+
+                                if (stableName != "Unknown") {
+                                    viewModel.markAttendanceRecognized(stableName)
+                                }
+
+                                faceList.add(
+                                    FaceData(
+                                        bounds = bounds,
+                                        name = stableName,
+                                        id = faceId,
+                                        confidence = result.bestDistance
+                                    )
+                                )
+
+                                if (detectedFaces.size == 1 && stableName == "Unknown") {
+                                    viewModel.tryCaptureBurstSample(
+                                        faceId = faceId,
+                                        stableName = stableName,
+                                        bitmap = faceBitmap,
+                                        embedding = embedding
+                                    )
+                                }
+
+                                // also allow auto-capture during attendance
+                                viewModel.maybeAutoCapture(
+                                    faceId = faceId,
+                                    stableName = stableName,
+                                    bitmap = faceBitmap,
+                                    embedding = embedding
+                                )
+                            }
                         }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to process a single face", e)
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Face detection success handler failed", e)
-                    isProcessing.set(0)
                 }
-            }
-            .addOnFailureListener { e ->
-                Log.e(TAG, "Face detection failed", e)
+            } finally {
+                withContext(Dispatchers.Main) {
+                    viewModel.pruneFaceTracks(faceList.map { it.id }.toSet())
+                    viewModel.updateFaces(faceList)
+                }
                 isProcessing.set(0)
-            }
-            .addOnCompleteListener {
                 imageProxy.close()
             }
+        }
     } catch (e: Exception) {
         Log.e(TAG, "Frame processing exception", e)
         isProcessing.set(0)
@@ -1119,7 +1113,7 @@ private fun bindCameraUseCases(
     previewView: PreviewView,
     cameraSelector: CameraSelector,
     cameraExecutor: ExecutorService,
-    faceDetector: FaceDetector,
+    faceDetector: BlazeFaceDetector,
     faceRecognitionHelper: FaceRecognitionHelper,
     viewModel: MainViewModel
 ) {
@@ -1187,89 +1181,88 @@ private fun bindCameraUseCases(
 
 private fun processPickedImage(
     bitmap: Bitmap,
-    faceDetector: FaceDetector,
+    faceDetector: BlazeFaceDetector,
     faceRecognitionHelper: FaceRecognitionHelper,
     viewModel: MainViewModel
 ) {
     viewModel.updateAnalysisResolution(bitmap.width, bitmap.height)
-    val inputImage = InputImage.fromBitmap(bitmap, 0)
     Log.d(TAG, "processPickedImage: ${bitmap.width}x${bitmap.height}")
 
     val mode = viewModel.currentMode.value
 
-    faceDetector.process(inputImage)
-        .addOnSuccessListener { detectedFaces ->
-            Log.d(TAG, "Picked image: detected ${detectedFaces.size} face(s)")
-            viewModel.launchFrameWork {
-                val faceList = mutableListOf<FaceData>()
-                try {
-                    if (mode == Mode.REGISTER) {
-                        val candidateBitmaps = mutableListOf<Bitmap>()
-                        for (face in detectedFaces) {
-                            val cropped = cropBitmap(bitmap, face.boundingBox) ?: continue
-                            candidateBitmaps.add(cropped)
+    viewModel.launchFrameWork {
+        val detectedFaces = try {
+            faceDetector.detect(bitmap)
+        } catch (e: Exception) {
+            Log.e(TAG, "Face detection on picked image failed", e)
+            emptyList()
+        }
+        Log.d(TAG, "Picked image: detected ${detectedFaces.size} face(s)")
+        val faceList = mutableListOf<FaceData>()
+        try {
+            if (mode == Mode.REGISTER) {
+                val candidateBitmaps = mutableListOf<Bitmap>()
+                for (face in detectedFaces) {
+                    val cropped = cropBitmap(bitmap, face.bounds) ?: continue
+                    candidateBitmaps.add(cropped)
+                    faceList.add(
+                        FaceData(
+                            bounds = face.bounds,
+                            name = "",
+                            id = FaceData.stableId(face.bounds)
+                        )
+                    )
+                }
+                withContext(Dispatchers.Main) {
+                    viewModel.updateRegisterCandidates(candidateBitmaps)
+                    viewModel.pruneFaceTracks(faceList.map { it.id }.toSet())
+                    viewModel.updateFaces(faceList)
+                }
+            } else {
+                for (face in detectedFaces) {
+                    try {
+                        val bounds = face.bounds
+                        val faceBitmap = cropBitmap(bitmap, bounds) ?: continue
+                        val embedding = faceRecognitionHelper.getEmbedding(faceBitmap)
+                        val result = faceRecognitionHelper.recognize(embedding)
+                        val faceId = FaceData.stableId(bounds)
+                        val stableName = viewModel.stabilizeRecognition(faceId, result)
+
+                        if (stableName == "Unknown") {
                             faceList.add(
                                 FaceData(
-                                    bounds = face.boundingBox,
-                                    name = "",
-                                    id = FaceData.stableId(face.boundingBox)
+                                    bounds = bounds,
+                                    name = "Unknown",
+                                    id = faceId,
+                                    enrollmentBitmap = faceBitmap.copy(
+                                        faceBitmap.config ?: Bitmap.Config.ARGB_8888,
+                                        true
+                                    ),
+                                    enrollmentEmbedding = embedding.copyOf()
+                                )
+                            )
+                        } else {
+                            faceList.add(
+                                FaceData(
+                                    bounds = bounds,
+                                    name = stableName,
+                                    id = faceId
                                 )
                             )
                         }
-                        withContext(Dispatchers.Main) {
-                            viewModel.updateRegisterCandidates(candidateBitmaps)
-                            viewModel.pruneFaceTracks(faceList.map { it.id }.toSet())
-                            viewModel.updateFaces(faceList)
-                        }
-                    } else {
-                        for (face in detectedFaces) {
-                            try {
-                                val bounds = face.boundingBox
-                                val faceBitmap = cropBitmap(bitmap, bounds) ?: continue
-                                val embedding = faceRecognitionHelper.getEmbedding(faceBitmap)
-                                val result = faceRecognitionHelper.recognize(embedding)
-                                val faceId = FaceData.stableId(bounds)
-                                val stableName = viewModel.stabilizeRecognition(faceId, result)
-
-                                if (stableName == "Unknown") {
-                                    faceList.add(
-                                        FaceData(
-                                            bounds = bounds,
-                                            name = "Unknown",
-                                            id = faceId,
-                                            enrollmentBitmap = faceBitmap.copy(
-                                                faceBitmap.config ?: Bitmap.Config.ARGB_8888,
-                                                true
-                                            ),
-                                            enrollmentEmbedding = embedding.copyOf()
-                                        )
-                                    )
-                                } else {
-                                    faceList.add(
-                                        FaceData(
-                                            bounds = bounds,
-                                            name = stableName,
-                                            id = faceId
-                                        )
-                                    )
-                                }
-                            } catch (e: Exception) {
-                                Log.e(TAG, "Failed to process picked image face", e)
-                            }
-                        }
-                        withContext(Dispatchers.Main) {
-                            viewModel.pruneFaceTracks(faceList.map { it.id }.toSet())
-                            viewModel.updateFaces(faceList)
-                        }
+                    } catch (e: Exception) {
+                        Log.e(TAG, "Failed to process picked image face", e)
                     }
-                } catch (e: Exception) {
-                    Log.e(TAG, "processPickedImage failed", e)
+                }
+                withContext(Dispatchers.Main) {
+                    viewModel.pruneFaceTracks(faceList.map { it.id }.toSet())
+                    viewModel.updateFaces(faceList)
                 }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "processPickedImage failed", e)
         }
-        .addOnFailureListener { e ->
-            Log.e(TAG, "Face detection on picked image failed", e)
-        }
+    }
 }
 
 internal fun loadAndOrientBitmap(context: android.content.Context, uri: Uri): Bitmap? {

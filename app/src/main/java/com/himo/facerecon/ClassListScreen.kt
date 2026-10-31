@@ -66,7 +66,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.google.mlkit.vision.face.FaceDetector
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -75,7 +74,7 @@ import java.util.Locale
 @Composable
 fun ClassListScreen(
     viewModel: MainViewModel,
-    faceDetector: FaceDetector? = null,
+    faceDetector: BlazeFaceDetector? = null,
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
