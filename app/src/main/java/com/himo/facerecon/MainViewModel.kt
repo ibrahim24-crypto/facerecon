@@ -8,14 +8,11 @@ import android.util.Log
 import android.widget.Toast
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
-import com.google.mlkit.vision.common.InputImage
-import com.google.mlkit.vision.face.FaceDetector
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 
@@ -742,7 +739,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun addPersonFromImage(
         personName: String,
         bitmap: Bitmap,
-        faceDetector: FaceDetector,
+        faceDetector: BlazeFaceDetector,
         context: Context
     ) {
         viewModelScope.launch {
@@ -779,52 +776,48 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private suspend fun detectFacesInBitmap(bitmap: Bitmap, faceDetector: FaceDetector): List<FaceData> {
-        return suspendCancellableCoroutine { continuation ->
-            val inputImage = InputImage.fromBitmap(bitmap, 0)
-            faceDetector.process(inputImage)
-                .addOnSuccessListener { detectedFaces ->
-                    val faceList = mutableListOf<FaceData>()
-                    for (face in detectedFaces) {
-                        try {
-                            val bounds = face.boundingBox
-                            val left = bounds.left.coerceIn(0, bitmap.width - 1)
-                            val top = bounds.top.coerceIn(0, bitmap.height - 1)
-                            val width = (bounds.right - bounds.left).coerceIn(1, bitmap.width - left)
-                            val height = (bounds.bottom - bounds.top).coerceIn(1, bitmap.height - top)
-                            val faceBitmap = Bitmap.createBitmap(bitmap, left, top, width, height)
-
-                            val embedding = faceRecognitionHelper.getEmbedding(faceBitmap)
-                            val result = faceRecognitionHelper.recognize(embedding)
-                            val faceId = FaceData.stableId(bounds)
-                            val stableName = stabilizeRecognition(faceId, result)
-
-                            if (stableName == "Unknown") {
-                                faceList.add(
-                                    FaceData(
-                                        bounds = bounds,
-                                        name = "Unknown",
-                                        id = faceId,
-                                        enrollmentBitmap = faceBitmap.copy(
-                                            faceBitmap.config ?: Bitmap.Config.ARGB_8888, true
-                                        ),
-                                        enrollmentEmbedding = embedding.copyOf()
-                                    )
-                                )
-                            } else {
-                                faceList.add(FaceData(bounds = bounds, name = stableName, id = faceId))
-                            }
-                        } catch (e: Exception) {
-                            Log.e(TAG, "Face detection on frame failed", e)
-                        }
-                    }
-                    continuation.resume(faceList)
-                }
-                .addOnFailureListener { e ->
-                    Log.e(TAG, "Face detection failed on bitmap", e)
-                    continuation.resume(emptyList())
-                }
+    private suspend fun detectFacesInBitmap(bitmap: Bitmap, faceDetector: BlazeFaceDetector): List<FaceData> {
+        val detectedFaces = try {
+            faceDetector.detect(bitmap)
+        } catch (e: Exception) {
+            Log.e(TAG, "Face detection failed on bitmap", e)
+            emptyList()
         }
+        val faceList = mutableListOf<FaceData>()
+        for (face in detectedFaces) {
+            try {
+                val bounds = face.bounds
+                val left = bounds.left.coerceIn(0, bitmap.width - 1)
+                val top = bounds.top.coerceIn(0, bitmap.height - 1)
+                val width = (bounds.right - bounds.left).coerceIn(1, bitmap.width - left)
+                val height = (bounds.bottom - bounds.top).coerceIn(1, bitmap.height - top)
+                val faceBitmap = Bitmap.createBitmap(bitmap, left, top, width, height)
+
+                val embedding = faceRecognitionHelper.getEmbedding(faceBitmap)
+                val result = faceRecognitionHelper.recognize(embedding)
+                val faceId = FaceData.stableId(bounds)
+                val stableName = stabilizeRecognition(faceId, result)
+
+                if (stableName == "Unknown") {
+                    faceList.add(
+                        FaceData(
+                            bounds = bounds,
+                            name = "Unknown",
+                            id = faceId,
+                            enrollmentBitmap = faceBitmap.copy(
+                                faceBitmap.config ?: Bitmap.Config.ARGB_8888, true
+                            ),
+                            enrollmentEmbedding = embedding.copyOf()
+                        )
+                    )
+                } else {
+                    faceList.add(FaceData(bounds = bounds, name = stableName, id = faceId))
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Face detection on frame failed", e)
+            }
+        }
+        return faceList
     }
 
     fun refreshClasses() {
@@ -1106,31 +1099,30 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         faceStabilizer.clear()
     }
 
-    fun processImageForClass(className: String, bitmap: Bitmap, faceDetector: FaceDetector, existingClassId: String? = null, existingStudents: List<String> = emptyList()) {
+    fun processImageForClass(className: String, bitmap: Bitmap, faceDetector: BlazeFaceDetector, existingClassId: String? = null, existingStudents: List<String> = emptyList()) {
         _pendingClassName.value = className
         _pendingClassRoster.value = existingStudents
         pendingClassId = existingClassId
         viewModelScope.launch {
             val faces = withContext(Dispatchers.Default) {
-                suspendCancellableCoroutine { continuation ->
-                    val inputImage = InputImage.fromBitmap(bitmap, 0)
-                    faceDetector.process(inputImage)
-                        .addOnSuccessListener { detectedFaces ->
-                            val crops = mutableListOf<Bitmap>()
-                            for (face in detectedFaces) {
-                                val bounds = face.boundingBox
-                                val left = bounds.left.coerceIn(0, bitmap.width - 1)
-                                val top = bounds.top.coerceIn(0, bitmap.height - 1)
-                                val w = (bounds.right - bounds.left).coerceIn(1, bitmap.width - left)
-                                val h = (bounds.bottom - bounds.top).coerceIn(1, bitmap.height - top)
-                                try {
-                                    crops.add(Bitmap.createBitmap(bitmap, left, top, w, h))
-                                } catch (_: Exception) {}
-                            }
-                            continuation.resume(crops)
-                        }
-                        .addOnFailureListener { continuation.resume(emptyList<Bitmap>()) }
+                val crops = mutableListOf<Bitmap>()
+                val detectedFaces = try {
+                    faceDetector.detect(bitmap)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Face detection failed for class image", e)
+                    emptyList()
                 }
+                for (face in detectedFaces) {
+                    val bounds = face.bounds
+                    val left = bounds.left.coerceIn(0, bitmap.width - 1)
+                    val top = bounds.top.coerceIn(0, bitmap.height - 1)
+                    val w = (bounds.right - bounds.left).coerceIn(1, bitmap.width - left)
+                    val h = (bounds.bottom - bounds.top).coerceIn(1, bitmap.height - top)
+                    try {
+                        crops.add(Bitmap.createBitmap(bitmap, left, top, w, h))
+                    } catch (_: Exception) {}
+                }
+                crops
             }
             _pendingScanCandidates.value = faces
             if (faces.isEmpty()) {

@@ -50,13 +50,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.google.mlkit.vision.face.FaceDetector
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ManageFacesScreen(
     viewModel: MainViewModel,
-    faceDetector: FaceDetector,
+    faceDetector: BlazeFaceDetector,
     modifier: Modifier = Modifier
 ) {
     val currentScreen by viewModel.currentScreen.collectAsStateWithLifecycle()
