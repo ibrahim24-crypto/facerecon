@@ -26,12 +26,30 @@ import androidx.compose.ui.graphics.toArgb
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.delay
 
 private val UnknownColor = Color(0xFFFF1744)
 private val KnownColor = Color(0xFF00E676)
 private val RegisterColor = Color(0xFFFF9100)
+
+internal data class FaceBoxStyle(val color: Color, val drawFill: Boolean)
+
+internal fun faceBoxStyle(
+    isRegisterMode: Boolean,
+    isScanMode: Boolean,
+    isUnknown: Boolean,
+    name: String,
+    rosterNames: Set<String>
+): FaceBoxStyle = when {
+    isRegisterMode -> FaceBoxStyle(RegisterColor, drawFill = true)
+    isScanMode && isUnknown -> FaceBoxStyle(UnknownColor, drawFill = true)
+    isScanMode && name !in rosterNames -> FaceBoxStyle(RegisterColor, drawFill = true)
+    isScanMode -> FaceBoxStyle(KnownColor, drawFill = false)
+    isUnknown -> FaceBoxStyle(UnknownColor, drawFill = true)
+    else -> FaceBoxStyle(KnownColor, drawFill = false)
+}
 
 @Composable
 fun FaceOverlay(
@@ -42,6 +60,9 @@ fun FaceOverlay(
     onUnknownFaceTap: (String) -> Unit = {},
     modifier: Modifier = Modifier,
     isRegisterMode: Boolean = false,
+    isScanMode: Boolean = false,
+    rosterNames: Set<String> = emptySet(),
+    onKnownFaceTap: ((faceId: String, name: String) -> Unit)? = null,
     showFaceIndex: Boolean = false
 ) {
     val hasRecognizedFace = faces.any { it.name.isNotEmpty() && it.name != "Unknown" }
@@ -57,6 +78,7 @@ fun FaceOverlay(
     )
 
     val labelBackground = Color.Black.copy(alpha = 0.55f)
+    val addedCheckLabel = stringResource(R.string.face_in_roster_check)
     val cornerRadius = 12.dp
     val baseStroke = if (faces.size <= 2) 5f else if (faces.size <= 5) 3f else 2f
 
@@ -71,7 +93,7 @@ fun FaceOverlay(
     Canvas(
         modifier = modifier
             .fillMaxSize()
-            .pointerInput(faces) {
+            .pointerInput(faces, rosterNames, isScanMode, onKnownFaceTap) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     val downPos = down.position
@@ -95,10 +117,11 @@ fun FaceOverlay(
                                         mirrorHorizontally = mirrorHorizontally
                                     )
                                     if (tap.x in rect.left..rect.right && tap.y in rect.top..rect.bottom) {
-                                        if (isUnknown) {
-                                            onUnknownFaceTap(face.id)
-                                        } else {
-                                            revealedFaceId = face.id
+                                        when {
+                                            isUnknown -> onUnknownFaceTap(face.id)
+                                            isScanMode && face.name !in rosterNames && onKnownFaceTap != null ->
+                                                onKnownFaceTap(face.id, face.name)
+                                            else -> revealedFaceId = face.id
                                         }
                                         break
                                     }
@@ -120,7 +143,14 @@ fun FaceOverlay(
 
         for (face in faces) {
             val isUnknown = face.name == "Unknown" || face.name.isEmpty()
-            val color = if (isRegisterMode) RegisterColor else if (isUnknown) UnknownColor else KnownColor
+            val style = faceBoxStyle(
+                isRegisterMode = isRegisterMode,
+                isScanMode = isScanMode,
+                isUnknown = isUnknown,
+                name = face.name,
+                rosterNames = rosterNames
+            )
+            val color = style.color
 
             val screenRect = FaceCoordinateMapper.toScreenRect(
                 bounds = face.bounds,
@@ -150,12 +180,26 @@ fun FaceOverlay(
                 style = Stroke(width = finalStroke)
             )
 
-            if (isRegisterMode || isUnknown) {
+            if (style.drawFill) {
                 drawRoundRect(
                     color = color.copy(alpha = 0.18f),
                     topLeft = Offset(drawLeft, drawTop),
                     size = Size(width, height),
                     cornerRadius = CornerRadius(scaledCorner, scaledCorner)
+                )
+            }
+
+            if (isScanMode && !isUnknown && face.name in rosterNames && face.id != revealedFaceId) {
+                val checkPaint = Paint().also { p ->
+                    p.color = color.toArgb()
+                    p.textSize = 32f
+                    p.isAntiAlias = true
+                }
+                drawContext.canvas.nativeCanvas.drawText(
+                    addedCheckLabel,
+                    drawLeft + 8f,
+                    (drawTop - 8f).coerceAtLeast(checkPaint.textSize),
+                    checkPaint
                 )
             }
 

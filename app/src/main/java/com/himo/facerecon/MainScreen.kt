@@ -319,12 +319,15 @@ fun MainScreen(
             Box(modifier = Modifier.weight(1f)) {
                 when {
                     isImageMode && pickedImageBitmap != null -> {
-                        Image(
-                            bitmap = pickedImageBitmap!!.asImageBitmap(),
-                            contentDescription = "Picked image",
-                            modifier = Modifier.fillMaxSize(),
-                            contentScale = ContentScale.Fit
-                        )
+                        val pickedBitmap = pickedImageBitmap
+                        if (pickedBitmap != null) {
+                            Image(
+                                bitmap = pickedBitmap.asImageBitmap(),
+                                contentDescription = "Picked image",
+                                modifier = Modifier.fillMaxSize(),
+                                contentScale = ContentScale.Fit
+                            )
+                        }
                     }
                     else -> {
                         AndroidView(
@@ -340,7 +343,10 @@ fun MainScreen(
                     mirrorHorizontally = if (isImageMode) false else isFrontCamera,
                     onUnknownFaceTap = viewModel::requestEnrollUnknown,
                     modifier = Modifier.fillMaxSize(),
-                    isRegisterMode = currentMode == Mode.REGISTER || currentMode == Mode.SCAN,
+                    isRegisterMode = currentMode == Mode.REGISTER,
+                    isScanMode = currentMode == Mode.SCAN,
+                    rosterNames = pendingClassRoster.toSet(),
+                    onKnownFaceTap = { _, name -> viewModel.addKnownFaceToRoster(name) },
                     showFaceIndex = viewModel.showFaceIndex.collectAsStateWithLifecycle().value
                 )
 
@@ -818,7 +824,7 @@ private fun ScanRosterCard(
                     color = MaterialTheme.colorScheme.primary
                 )
                 Text(
-                    text = "Tap a face to name and add to class (${roster.size} added)",
+                    text = stringResource(R.string.scan_roster_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )

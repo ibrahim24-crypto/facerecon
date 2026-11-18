@@ -1084,6 +1084,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _pendingClassRoster.value = _pendingClassRoster.value.filter { it != name }
     }
 
+    fun addKnownFaceToRoster(name: String) {
+        if (_currentMode.value != Mode.SCAN) return
+        if (name !in faceRecognitionHelper.getAllKnownNames()) return
+        if (name in _pendingClassRoster.value) return
+        _pendingClassRoster.value = (_pendingClassRoster.value + name).distinct()
+        val app = getApplication<Application>()
+        Toast.makeText(app, app.getString(R.string.known_face_added, name), Toast.LENGTH_SHORT).show()
+    }
+
+    fun removeFromRoster(name: String) {
+        removePendingStudent(name)
+    }
+
     fun exitScanMode() {
         _pendingClassName.value = ""
         _pendingClassRoster.value = emptyList()
