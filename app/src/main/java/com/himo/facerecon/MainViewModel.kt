@@ -16,6 +16,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 
+data class KnownImageFace(val name: String, val bitmap: Bitmap)
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val faceRecognitionHelper = FaceRecognitionHelper(application)
@@ -142,6 +144,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _pendingScanCandidates = MutableStateFlow<List<Bitmap>>(emptyList())
     val pendingScanCandidates: StateFlow<List<Bitmap>> = _pendingScanCandidates.asStateFlow()
+
+    private val _pendingKnownImageFaces = MutableStateFlow<List<KnownImageFace>>(emptyList())
+    val pendingKnownImageFaces: StateFlow<List<KnownImageFace>> = _pendingKnownImageFaces.asStateFlow()
 
     private val _rosterEnrollmentNames = MutableStateFlow<List<String>>(emptyList())
     val rosterEnrollmentNames: StateFlow<List<String>> = _rosterEnrollmentNames.asStateFlow()
@@ -1086,21 +1091,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun addKnownFaceToRoster(name: String) {
         if (_currentMode.value != Mode.SCAN) return
-        if (name !in faceRecognitionHelper.getAllKnownNames()) return
-        if (name in _pendingClassRoster.value) return
+        addNameToPendingRoster(name)
+    }
+
+    private fun addNameToPendingRoster(name: String): Boolean {
+        if (name !in faceRecognitionHelper.getAllKnownNames()) return false
+        if (name in _pendingClassRoster.value) return false
         _pendingClassRoster.value = (_pendingClassRoster.value + name).distinct()
         val app = getApplication<Application>()
         Toast.makeText(app, app.getString(R.string.known_face_added, name), Toast.LENGTH_SHORT).show()
+        return true
     }
 
     fun removeFromRoster(name: String) {
         removePendingStudent(name)
     }
 
+    fun addKnownImageFace(name: String) {
+        if (addNameToPendingRoster(name)) {
+            skipKnownImageFace(name)
+        }
+    }
+
+    fun skipKnownImageFace(name: String) {
+        _pendingKnownImageFaces.value = _pendingKnownImageFaces.value.filterNot { it.name == name }
+    }
+
     fun exitScanMode() {
         _pendingClassName.value = ""
         _pendingClassRoster.value = emptyList()
         _pendingScanCandidates.value = emptyList()
+        _pendingKnownImageFaces.value = emptyList()
         pendingClassId = null
         _currentMode.value = Mode.CAMERA
         navigateBack()
@@ -1112,9 +1133,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _pendingClassName.value = className
         _pendingClassRoster.value = existingStudents
         pendingClassId = existingClassId
+        _pendingKnownImageFaces.value = emptyList()
         viewModelScope.launch {
-            val faces = withContext(Dispatchers.Default) {
+            val (unknownCrops, knownFaces) = withContext(Dispatchers.Default) {
                 val crops = mutableListOf<Bitmap>()
+                val known = mutableListOf<KnownImageFace>()
                 val detectedFaces = try {
                     faceDetector.detectMultiScale(bitmap)
                 } catch (e: Exception) {
@@ -1122,14 +1145,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     emptyList()
                 }
                 for (face in detectedFaces) {
+                    val crop = try {
+                        face.cropForEmbedding(bitmap) ?: continue
+                    } catch (_: Exception) {
+                        continue
+                    }
                     try {
-                        face.cropForEmbedding(bitmap)?.let { crops.add(it) }
-                    } catch (_: Exception) {}
+                        val embedding = faceRecognitionHelper.getEmbedding(crop)
+                        val result = faceRecognitionHelper.recognize(embedding)
+                        if (result.name != "Unknown") {
+                            known.add(KnownImageFace(result.name, crop))
+                            continue
+                        }
+                    } catch (e: Exception) {
+                        Log.w(TAG, "Could not recognize class photo face", e)
+                    }
+                    crops.add(crop)
                 }
-                crops
+                crops to known
             }
-            _pendingScanCandidates.value = faces
-            if (faces.isEmpty()) {
+            _pendingScanCandidates.value = unknownCrops
+            _pendingKnownImageFaces.value = knownFaces
+            if (unknownCrops.isEmpty() && knownFaces.isEmpty()) {
                 Toast.makeText(getApplication(), "No faces found in image", Toast.LENGTH_SHORT).show()
             }
         }

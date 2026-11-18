@@ -76,4 +76,8 @@
     <string name="search_registered_students">Search registered students...</string>
     <string name="no_registered_students">No registered students available</string>
     <string name="add_selected">Add selected</string>
+    <string name="class_photo_hint">Known faces: add them to the class. Unknown faces: tap to name (%1$d remaining, %2$d added).</string>
+    <string name="known_faces_in_photo">Known faces in this photo</string>
+    <string name="add">Add</string>
+    <string name="skip">Skip</string>
 </resources>

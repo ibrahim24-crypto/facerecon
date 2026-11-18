@@ -83,6 +83,7 @@ fun ClassListScreen(
     val classes by viewModel.classes.collectAsStateWithLifecycle()
     val knownNames by viewModel.knownNames.collectAsStateWithLifecycle()
     val pendingScanCandidates by viewModel.pendingScanCandidates.collectAsStateWithLifecycle()
+    val pendingKnownImageFaces by viewModel.pendingKnownImageFaces.collectAsStateWithLifecycle()
     val pendingClassName by viewModel.pendingClassName.collectAsStateWithLifecycle()
     val pendingClassRoster by viewModel.pendingClassRoster.collectAsStateWithLifecycle()
     val classHistory by viewModel.classHistory.collectAsStateWithLifecycle()
@@ -501,7 +502,7 @@ fun ClassListScreen(
             modifier = Modifier.fillMaxSize().padding(padding).padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (pendingScanCandidates.isNotEmpty()) {
+            if (pendingScanCandidates.isNotEmpty() || pendingKnownImageFaces.isNotEmpty()) {
                 // Image candidate naming UI
                 Card(
                     modifier = Modifier.fillMaxWidth(),
@@ -511,10 +512,51 @@ fun ClassListScreen(
                     Column(modifier = Modifier.fillMaxWidth().padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Text("Class: $pendingClassName", style = MaterialTheme.typography.titleMedium)
                         Text(
-                            "Tap a face to name it (${pendingScanCandidates.size} remaining, ${pendingClassRoster.size} added)",
+                            stringResource(
+                                R.string.class_photo_hint,
+                                pendingScanCandidates.size,
+                                pendingClassRoster.size
+                            ),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                         )
+                        if (pendingKnownImageFaces.isNotEmpty()) {
+                            Text(
+                                stringResource(R.string.known_faces_in_photo),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(pendingKnownImageFaces) { known ->
+                                    Card(
+                                        shape = MaterialTheme.shapes.small,
+                                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+                                    ) {
+                                        Column(
+                                            modifier = Modifier.padding(8.dp),
+                                            horizontalAlignment = Alignment.CenterHorizontally,
+                                            verticalArrangement = Arrangement.spacedBy(4.dp)
+                                        ) {
+                                            Image(
+                                                bitmap = known.bitmap.asImageBitmap(),
+                                                contentDescription = known.name,
+                                                modifier = Modifier.size(64.dp).clip(MaterialTheme.shapes.small),
+                                                contentScale = ContentScale.Crop
+                                            )
+                                            Text(known.name, style = MaterialTheme.typography.bodySmall)
+                                            Row {
+                                                TextButton(onClick = { viewModel.addKnownImageFace(known.name) }) {
+                                                    Text(stringResource(R.string.add))
+                                                }
+                                                TextButton(onClick = { viewModel.skipKnownImageFace(known.name) }) {
+                                                    Text(stringResource(R.string.skip))
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
                         LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), contentPadding = PaddingValues(horizontal = 4.dp)) {
                             items(pendingScanCandidates.size) { index ->
                                 Box(
