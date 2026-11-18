@@ -17,7 +17,7 @@ Enroll at least 3 samples per student for reliable recognition.
 
 ### Verify the download
 `sha256sum app-release.apk`
-Expected: `9963b804e6a53090826feeb3ac457ad1bdaa851dcda864af1c37d312710d9892`
+Expected: `0520f87faccffb65f8b74428b81b954aa4e098020d9e2061a28a38b31b3ecef6`
 
 ### Known limitations
 - UNSURE matches need manual confirmation in Attendance Review.

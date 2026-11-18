@@ -35,7 +35,8 @@ Implemented in:
 - Signing uses the repository-root `release-key.jks` (PKCS12, alias `facerecon`), with root `key` as a fallback for older local setups.
 - Credentials are passed only via one-off Gradle properties (`-PfacereconReleaseStorePassword=... -PfacereconReleaseKeyAlias=... -PfacereconReleaseKeyPassword=...`) or environment variables; they are not committed.
 - `:app:assembleRelease` succeeded. `apksigner verify --verbose --print-certs` reports `Verifies`, v2 scheme true, one signer, certificate DN `CN=Ibrahim Ezzine, OU=Dev, O=Himo, L=City, ST=State, C=MA`, certificate SHA-256 `38cc5e739a209d4f94e3b6467669722cbe9623afac44cea9b91372f6640ea847`.
-- Output: `app/build/outputs/apk/release/app-release.apk`, 134,495,098 bytes, SHA-256 `9963b804e6a53090826feeb3ac457ad1bdaa851dcda864af1c37d312710d9892` (also recorded in `RELEASE_NOTES.md`).
+- Output: `app/build/outputs/apk/release/app-release.apk`, 134,495,098 bytes, SHA-256 `0520f87faccffb65f8b74428b81b954aa4e098020d9e2061a28a38b31b3ecef6` (also recorded in `RELEASE_NOTES.md`).
+- Hotfix after the release build: `FaceStorage.encrypt` no longer supplies a caller-created IV to Android Keystore (which rejects it with `InvalidAlgorithmParameterException: Caller-provided IV not permitted`). The Cipher now generates the IV and the app stores it alongside the ciphertext, keeping the same on-disk format. The rebuilt APK was installed over the existing app with `adb install -r` without data loss.
 
 ## What was skipped and why
 
