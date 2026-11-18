@@ -57,6 +57,30 @@ class AttendanceStorage(context: Context) {
         persist(all)
     }
 
+    /** Rewrites a student name across all historical sessions in one pass. */
+    fun renameStudentEverywhere(oldName: String, newName: String) {
+        val updated = loadAll().map { session ->
+            session.copy(
+                presentNames = session.presentNames.renamedSet(oldName, newName),
+                absentNames = session.absentNames.renamedSet(oldName, newName),
+                unsureNames = session.unsureNames.renamedSet(oldName, newName),
+                timestamps = session.timestamps.renamedTimestampKey(oldName, newName)
+            )
+        }
+        persist(updated)
+    }
+
+    private fun Set<String>.renamedSet(oldName: String, newName: String): Set<String> =
+        if (oldName in this) (this - oldName + newName) else this
+
+    private fun Map<String, Long>.renamedTimestampKey(oldName: String, newName: String): Map<String, Long> {
+        if (oldName !in this) return this
+        val oldTime = this[oldName] ?: 0L
+        return (this - oldName).toMutableMap().also { map ->
+            map[newName] = maxOf(oldTime, map[newName] ?: 0L)
+        }
+    }
+
     private fun persist(sessions: List<AttendanceSession>) {
         val json = JSONObject()
         val array = JSONArray()

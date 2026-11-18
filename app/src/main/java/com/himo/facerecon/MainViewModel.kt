@@ -18,6 +18,21 @@ import kotlin.coroutines.resume
 
 data class KnownImageFace(val name: String, val bitmap: Bitmap)
 
+/** Name-based identity helpers used when a person is renamed. */
+private fun Set<String>.renamed(oldName: String, newName: String): Set<String> =
+    if (oldName in this) (this - oldName + newName) else this
+
+private fun List<String>.renamed(oldName: String, newName: String): List<String> =
+    if (oldName in this) map { if (it == oldName) newName else it }.distinct() else this
+
+private fun Map<String, Long>.renamedKey(oldName: String, newName: String): Map<String, Long> {
+    if (oldName !in this) return this
+    val oldTime = this[oldName] ?: 0L
+    return (this - oldName).toMutableMap().also { map ->
+        map[newName] = maxOf(oldTime, map[newName] ?: 0L)
+    }
+}
+
 class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     val faceRecognitionHelper = FaceRecognitionHelper(application)
@@ -747,8 +762,34 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 faceRecognitionHelper.renamePerson(oldName, trimmedNew)
+                // Names are the identity key in classes and attendance history, so
+                // every stored reference must be rewritten together with the face.
+                classStorage.renameStudentEverywhere(oldName, trimmedNew)
+                attendanceStorage.renameStudentEverywhere(oldName, trimmedNew)
             }
             refreshKnownNames()
+            refreshClasses()
+            _selectedClass.value = _selectedClass.value?.let { group ->
+                if (oldName in group.studentNames) {
+                    group.copy(studentNames = group.studentNames.renamed(oldName, trimmedNew))
+                } else {
+                    group
+                }
+            }
+            _attendanceSession.value = _attendanceSession.value?.let { session ->
+                session.copy(
+                    presentNames = session.presentNames.renamed(oldName, trimmedNew),
+                    absentNames = session.absentNames.renamed(oldName, trimmedNew),
+                    unsureNames = session.unsureNames.renamed(oldName, trimmedNew),
+                    timestamps = session.timestamps.renamedKey(oldName, trimmedNew)
+                )
+            }
+            _attendancePresent.value = _attendancePresent.value.renamed(oldName, trimmedNew)
+            _attendanceUnsure.value = _attendanceUnsure.value.renamed(oldName, trimmedNew)
+            _attendanceTimestamps.value = _attendanceTimestamps.value.renamedKey(oldName, trimmedNew)
+            _pendingClassRoster.value = _pendingClassRoster.value.renamed(oldName, trimmedNew)
+            _rosterEnrollmentNames.value = _rosterEnrollmentNames.value.renamed(oldName, trimmedNew)
+            _classHistory.value = attendanceStorage.loadAll()
             if (_selectedPerson.value == oldName) {
                 _selectedPerson.value = trimmedNew
                 refreshPersonSamples()

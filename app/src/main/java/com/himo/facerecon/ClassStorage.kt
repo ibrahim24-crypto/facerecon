@@ -51,6 +51,21 @@ class ClassStorage(context: Context) {
         persist(all)
     }
 
+    /** Rewrites a student name in every class roster in one pass. */
+    fun renameStudentEverywhere(oldName: String, newName: String) {
+        val updated = loadAll().map { group ->
+            if (oldName in group.studentNames) {
+                group.copy(
+                    studentNames = group.studentNames.map { if (it == oldName) newName else it }
+                        .distinct()
+                )
+            } else {
+                group
+            }
+        }
+        persist(updated)
+    }
+
     private fun persist(classes: List<ClassGroup>) {
         val json = JSONObject()
         val array = JSONArray()
