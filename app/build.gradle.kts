@@ -3,7 +3,12 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
-val releaseStoreFile = rootProject.file("key")
+// The original signed release key is release-key.jks (ignored by Git).
+// Keep "key" as a fallback for older local setups.
+val releaseStoreFile = listOf("release-key.jks", "key")
+    .map { rootProject.file(it) }
+    .firstOrNull { it.isFile }
+    ?: rootProject.file("release-key.jks")
 val releaseStorePassword = providers.gradleProperty("facereconReleaseStorePassword")
     .orElse(providers.environmentVariable("FACERECON_RELEASE_STORE_PASSWORD"))
     .orNull
@@ -71,7 +76,7 @@ tasks.configureEach {
     if (name == "validateSigningRelease") {
         doFirst {
             val missing = buildList {
-                if (!releaseStoreFile.isFile) add("root/key signing file")
+                if (!releaseStoreFile.isFile) add("root/release-key.jks signing file")
                 if (releaseStorePassword.isNullOrBlank()) add("FACERECON_RELEASE_STORE_PASSWORD")
                 if (releaseKeyAlias.isNullOrBlank()) add("FACERECON_RELEASE_KEY_ALIAS")
                 if (releaseKeyPassword.isNullOrBlank()) add("FACERECON_RELEASE_KEY_PASSWORD")

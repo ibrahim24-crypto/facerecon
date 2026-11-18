@@ -70,7 +70,12 @@ class FaceRecognitionStabilizer(
             return StabilizedRecognition(winner.key, unsure = true)
         }
         if (anyAmbiguous) {
-            return StabilizedRecognition(stableNames[faceId] ?: "Unknown", unsure = true)
+            // No confident majority yet: keep the last stable identity if one exists,
+            // otherwise expose the closest candidate so attendance can flag UNSURE.
+            val fallback = stableNames[faceId]?.takeIf { it != "Unknown" }
+                ?: displayName.takeIf { it != "Unknown" }
+                ?: "Unknown"
+            return StabilizedRecognition(fallback, unsure = true)
         }
 
         return StabilizedRecognition(stableNames[faceId] ?: "Unknown")

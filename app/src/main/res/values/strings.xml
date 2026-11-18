@@ -127,4 +127,18 @@
     <string name="delete_all_message">This will delete ALL enrolled faces, classes, and attendance history. This cannot be undone.</string>
     <string name="delete_everything">Delete Everything</string>
     <string name="all_data_deleted">All data deleted</string>
+
+    <!-- Settings sections -->
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_dark_theme">Dark theme</string>
+    <string name="settings_manage">Manage</string>
+    <string name="settings_enrolled_faces">Enrolled Faces</string>
+    <string name="settings_classes">Classes</string>
+    <string name="settings_data">Data</string>
+    <string name="classes_created">%1$d class(es) created</string>
+    <string name="backup">Backup</string>
+    <string name="restore">Restore</string>
+    <string name="clear_attendance_history">Clear Attendance History</string>
+    <string name="delete_all_data">Delete All Data</string>
+    <string name="app_display_name">FaceRecognition</string>
 </resources>

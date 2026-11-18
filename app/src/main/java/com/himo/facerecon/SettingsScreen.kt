@@ -118,7 +118,7 @@ fun SettingsScreen(
                 }) { Text(stringResource(R.string.clear)) }
             },
             dismissButton = {
-                TextButton(onClick = { showClearHistoryConfirm = false }) { Text("Cancel") }
+                TextButton(onClick = { showClearHistoryConfirm = false }) { Text(stringResource(R.string.cancel)) }
             }
         )
     }
@@ -136,7 +136,7 @@ fun SettingsScreen(
                 }) { Text(stringResource(R.string.delete_everything)) }
             },
             dismissButton = {
-                TextButton(onClick = { showClearAllConfirm = false }) { Text("Cancel") }
+                TextButton(onClick = { showClearAllConfirm = false }) { Text(stringResource(R.string.cancel)) }
             }
         )
     }
@@ -171,7 +171,7 @@ fun SettingsScreen(
             Spacer(modifier = Modifier.height(4.dp))
 
             // --- Appearance ---
-            SectionHeader(icon = Icons.Default.DarkMode, title = "Appearance")
+            SectionHeader(icon = Icons.Default.DarkMode, title = stringResource(R.string.settings_appearance))
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -187,7 +187,7 @@ fun SettingsScreen(
                         modifier = Modifier.size(22.dp)
                     )
                     Text(
-                        "Dark theme",
+                        stringResource(R.string.settings_dark_theme),
                         modifier = Modifier.padding(start = 14.dp).weight(1f),
                         style = MaterialTheme.typography.bodyLarge
                     )
@@ -284,7 +284,7 @@ fun SettingsScreen(
             }
 
             // --- Manage ---
-            SectionHeader(icon = Icons.Default.People, title = "Manage")
+            SectionHeader(icon = Icons.Default.People, title = stringResource(R.string.settings_manage))
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -299,7 +299,7 @@ fun SettingsScreen(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(Icons.Default.People, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Text("Enrolled Faces", modifier = Modifier.padding(start = 10.dp))
+                        Text(stringResource(R.string.settings_enrolled_faces), modifier = Modifier.padding(start = 10.dp))
                     }
                     FilledTonalButton(
                         onClick = { viewModel.navigateToClassList() },
@@ -307,7 +307,7 @@ fun SettingsScreen(
                         shape = RoundedCornerShape(12.dp)
                     ) {
                         Icon(Icons.Default.School, contentDescription = null, modifier = Modifier.size(20.dp))
-                        Text("Classes", modifier = Modifier.padding(start = 10.dp))
+                        Text(stringResource(R.string.settings_classes), modifier = Modifier.padding(start = 10.dp))
                     }
                 }
             }
@@ -357,7 +357,7 @@ fun SettingsScreen(
             }
 
             // --- Data ---
-            SectionHeader(icon = Icons.Default.CloudUpload, title = "Data")
+            SectionHeader(icon = Icons.Default.CloudUpload, title = stringResource(R.string.settings_data))
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -367,7 +367,7 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(10.dp)
                 ) {
                     Text(
-                        "${classes.size} class(es) created",
+                        stringResource(R.string.classes_created, classes.size),
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -386,7 +386,7 @@ fun SettingsScreen(
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Icon(Icons.Default.CloudUpload, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Text("Backup", modifier = Modifier.padding(start = 6.dp))
+                            Text(stringResource(R.string.backup), modifier = Modifier.padding(start = 6.dp))
                         }
                         FilledTonalButton(
                             onClick = { restoreLauncher.launch(arrayOf("application/zip", "application/octet-stream")) },
@@ -394,7 +394,7 @@ fun SettingsScreen(
                             shape = RoundedCornerShape(12.dp)
                         ) {
                             Icon(Icons.Default.CloudDownload, contentDescription = null, modifier = Modifier.size(18.dp))
-                            Text("Restore", modifier = Modifier.padding(start = 6.dp))
+                            Text(stringResource(R.string.restore), modifier = Modifier.padding(start = 6.dp))
                         }
                     }
 
@@ -403,7 +403,7 @@ fun SettingsScreen(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(12.dp)
                     ) {
-                        Text("Clear Attendance History")
+                        Text(stringResource(R.string.clear_attendance_history))
                     }
 
                     OutlinedButton(
@@ -415,7 +415,7 @@ fun SettingsScreen(
                         )
                     ) {
                         Icon(Icons.Default.DeleteForever, contentDescription = null, modifier = Modifier.size(18.dp))
-                        Text("Delete All Data", modifier = Modifier.padding(start = 6.dp))
+                        Text(stringResource(R.string.delete_all_data), modifier = Modifier.padding(start = 6.dp))
                     }
                 }
             }
@@ -427,7 +427,7 @@ fun SettingsScreen(
                 shape = RoundedCornerShape(16.dp),
             ) {
                 Column(modifier = Modifier.fillMaxWidth().padding(20.dp)) {
-                    Text("FaceRecognition", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(stringResource(R.string.app_display_name), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                     Text(
                         stringResource(R.string.about_version, BuildConfig.VERSION_NAME),
                         style = MaterialTheme.typography.bodySmall,

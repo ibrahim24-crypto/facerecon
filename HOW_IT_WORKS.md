@@ -32,8 +32,8 @@ Camera / Photo
         │
         ▼
 ┌─────────────────┐
-│  ML Kit Face     │  "Il y a un visage ici, ici et ici"
-│  Detection       │  (coordonnees rectangulaires)
+│  BlazeFace TFLite │ "Il y a un visage ici, ici et ici"
+│  Detection        │ (coordonnees rectangulaires)
 └────────┬────────┘
          │
          ▼
@@ -217,34 +217,37 @@ drawRoundRect(
 | Fichier | Role |
 |---------|------|
 | **AndroidManifest.xml** | Declaration de l'app : nom, permissions (camera), ecran principal |
-| **build.gradle.kts** | Liste toutes les dependances (CameraX, ML Kit, TFLite...) et comment construire l'app |
+| **build.gradle.kts** | Liste toutes les dependances (CameraX, TensorFlow Lite, Compose...) et comment construire l'app |
 | **strings.xml** | Tous les textes affiches (boutons, messages) en un seul fichier pour faciliter les modifications |
 
 ---
 
-## Detection faciale — ML Kit
+## Detection faciale — BlazeFace TFLite
 
-L'application utilise **Google ML Kit Face Detection**. C'est un modele pre-entraine qui regarde une image et renvoie des rectangles autour des visages trouves.
+L'application utilise **BlazeFace** (`blaze_face_full_range.tflite`) via TensorFlow Lite. C'est un modele pre-entraine qui regarde une image et renvoie des rectangles autour des visages trouves. Tout tourne sur l'appareil, sans Google Play Services ni acces reseau.
 
 ```kotlin
-// MainActivity.kt — creation du detecteur
-val options = FaceDetectorOptions.Builder()
-    .setPerformanceMode(PERFORMANCE_MODE_ACCURATE)
-    // ^ ACCURATE = privilegie la precision sur la vitesse.
-    //   L'autre option est PERFORMANCE_MODE_FAST (plus rapide mais moins precis)
+// BlazeFaceDetector.kt — creation du detecteur
+class BlazeFaceDetector(
+    context: Context,
+    private val modelFileName: String = "blaze_face_full_range.tflite"
+) : AutoCloseable {
 
-    .setMinFaceSize(0.15f)
-    // ^ Ignore les visages qui font moins de 15% de la taille de l'image.
-    //   Evite les faux positifs sur des petites taches ou du bruit.
-    //   0.15f = 15% (le f = Float)
-
-    .build()
-    // ^ Construit l'objet options avec les parametres ci-dessus
-
-faceDetector = FaceDetection.getClient(options)
-// ^ Cree le detecteur avec nos options. C'est un objet reutilisable.
-//   getClient() renvoie une instance partagee (singleton).
+    private val interpreter: Interpreter = Interpreter(
+        loadModelFile(context, modelFileName),
+        Interpreter.Options().apply { numThreads = 4 }
+    )
+    // ^ Le modele est charge depuis assets/ et l'interpreteur TFLite est cree une seule fois.
+    //   4 threads = acceleration CPU sans delegate GPU (compatible avec plus d'appareils).
+}
 ```
+
+**Explication :**
+- `detect(bitmap)` redimensionne l'image en 192×192, normalise les pixels entre -1 et 1, puis lit deux sorties : les boites (regressor) et les scores (classifier)
+- `SCORE_THRESHOLD = 0.5f` — un visage est garde seulement si son score depasse 0.5
+- `MIN_FACE_PX = 24` — les visages plus petits que 24 pixels sont ignores (bruit)
+- `isLocalMax` + `nonMaxSuppression` — evitent les doublons de detection
+- `detectMultiScale(bitmap)` — image entiere + 4 tuiles pour les photos de groupe (les petits visages occupent plus de place dans l'entree du modele)
 
 ### Traitement de chaque frame camera
 
@@ -254,7 +257,7 @@ La camera envoie ~30 images par seconde. La fonction `processFrame` dans `MainSc
 // MainScreen.kt — processFrame()
 private fun processFrame(
     imageProxy: ImageProxy,          // L'image brute de la camera
-    faceDetector: FaceDetector,       // Le detecteur ML Kit
+    faceDetector: BlazeFaceDetector,  // Le detecteur TFLite
     faceRecognitionHelper: FaceRecognitionHelper,  // Le moteur de reconnaissance
     viewModel: MainViewModel          // Le ViewModel pour mettre a jour l'etat
 ) {
@@ -262,7 +265,7 @@ private fun processFrame(
 
 **Explication des parametres :**
 - `ImageProxy` — c'est l'image brute fournie par CameraX. Contient les pixels bruts + des metadonnees (rotation, taille...)
-- `FaceDetector` — l'objet ML Kit cree precedemment
+- `BlazeFaceDetector` — l'objet TFLite cree precedemment
 - `FaceRecognitionHelper` — notre classe qui fait la reconnaissance (embedding + comparaison)
 - `MainViewModel` — pour communiquer les resultats a l'UI
 
@@ -350,20 +353,13 @@ private fun rotateBitmapForAnalysis(bitmap: Bitmap, degrees: Int): Bitmap {
 **Pourquoi ?** `FaceCoordinateMapper` a besoin de connaitre la taille de l'image d'analyse pour convertir les coordonnees des visages vers les coordonnees ecran. Cette taille change selon la camera et la rotation.
 
 ```kotlin
-    // Donner l'image a ML Kit
-    val inputImage = InputImage.fromBitmap(uprightBitmap, 0)
-    // ^ 0 = pas de rotation supplementaire (deja corrigee au-dessus)
-
     val mode = viewModel.currentMode.value
-    // ^ CAMERA ou REGISTER — le comportement change selon le mode
-```
+    // ^ CAMERA, SCAN, REGISTER ou ATTENDANCE — le comportement change selon le mode
 
-```kotlin
-    // Lancer la detection (asynchrone)
-    faceDetector.process(inputImage)
-        .addOnSuccessListener { detectedFaces ->
-            // detectedFaces = liste d'objets Face de ML Kit
-            // Chaque Face a : boundingBox (Rect), landmarks, contours...
+    viewModel.launchFrameWork {
+        // ^ Toute la reconnaissance tourne sur Dispatchers.Default, jamais sur le main thread.
+        val detectedFaces = faceDetector.detect(uprightBitmap)
+        // ^ Detection synchrone : une liste de FaceDet (bounds, score, keypoints).
 ```
 
 **Traitement de chaque visage detecte :**
@@ -385,9 +381,10 @@ private fun rotateBitmapForAnalysis(bitmap: Bitmap, degrees: Int): Bitmap {
                 // ^ Generer un ID stable base sur la position du visage.
                 //   Permet de suivre le meme visage entre deux frames.
 
-                val stableName = viewModel.stabilizeRecognition(faceId, result)
-                // ^ Le stabilisateur attend plusieurs detections coherentes
-                //   avant de changer le nom affiche (evite le clignotement)
+                val decision = viewModel.stabilizeRecognition(faceId, result)
+                val stableName = decision.name
+                // ^ Le stabilisateur attend plusieurs detections coherentes avant de changer
+                //   le nom affiche. decision.unsure indique un resultat a verifier (UNSURE).
             }
 ```
 
@@ -396,7 +393,7 @@ private fun rotateBitmapForAnalysis(bitmap: Bitmap, degrees: Int): Bitmap {
 private fun cropBitmap(bitmap: Bitmap, bounds: android.graphics.Rect): Bitmap? {
     val left = bounds.left.coerceIn(0, bitmap.width - 1)
     // ^ coerceIn = forcer la valeur a rester entre 0 et width-1.
-    //   Evite un crash si ML Kit renvoie un rectangle qui depasse l'image.
+    //   Evite un crash si le detecteur renvoie un rectangle qui depasse l'image.
 
     val top = bounds.top.coerceIn(0, bitmap.height - 1)
     val width = (bounds.right - bounds.left).coerceIn(1, bitmap.width - left)
@@ -412,16 +409,17 @@ private fun cropBitmap(bitmap: Bitmap, bounds: android.graphics.Rect): Bitmap? {
 ### Liberation du verrou et fermeture du proxy
 
 ```kotlin
-        .addOnCompleteListener {
-            imageProxy.close()
-            // ^ TOUJOURS fermer le proxy. CameraX reutilise ces buffers.
-            //   Si on ne ferme pas, la camera finit par geler.
+            } finally {
+                withContext(Dispatchers.Main) {
+                    viewModel.pruneFaceTracks(faceList.map { it.id }.toSet())
+                    viewModel.updateFaces(faceList)
+                }
+                isProcessing.set(0)
+                imageProxy.close()
+            }
         }
-    // ...
-    isProcessing.set(0)
-    // ^ Remettre le verrou a 0 pour accepter le prochain frame
-}
 ```
+**Explication :** `imageProxy.close()` est dans un `finally` : il est appele sur **tous** les chemins (succes, erreur, aucun visage, frame ignore). CameraX reutilise ces buffers ; sans fermeture la camera finit par geler. `pruneFaceTracks` oublie les visages qui ont disparu de l'image.
 
 ---
 
@@ -513,41 +511,41 @@ class FaceRecognitionHelper(context: Context, ...) {
 ### Etape 2 : Comparer les embeddings
 
 ```kotlin
-// FaceRecognitionHelper.kt — recognize()
-fun recognize(embedding: FloatArray, threshold: Float = DEFAULT_THRESHOLD): RecognitionResult {
-    var bestName = "Unknown"
-    // ^ Par defaut, on ne connait pas cette personne
+// FaceRecognitionHelper.kt — pure rule, testable without TFLite
+internal fun recognizeEmbedding(
+    embedding: FloatArray,
+    knownFaces: Map<String, List<FloatArray>>,
+    threshold: Float,
+    minMargin: Float = FaceRecognitionHelper.AMBIGUITY_MARGIN,
+    samplesPerPerson: Int = 3
+): RecognitionResult {
+    val normalized = l2Normalize(embedding)
+    // ^ On ramene le vecteur a une longueur de 1 (cosine ranking).
 
-    var bestAvgDist = Float.MAX_VALUE
-    // ^ La meilleure distance trouvee. MAX_VALUE = la pire possible.
+    val scores = knownFaces.mapNotNull { (name, samples) ->
+        val distances = samples.filter { it.isNotEmpty() }
+            .map { l2Distance(normalized, l2Normalize(it)) }.sorted()
+        val k = minOf(samplesPerPerson, distances.size)
+        name to (distances.take(k).sum() / k)
+        // ^ Moyenne des 3 echantillons LES PLUS proches, pas de tous les echantillons.
+        //   Un ancien echantillon de mauvaise qualite ne peut pas ruiner le score.
+    }.sortedBy { it.second }
 
-    for ((name, samples) in knownFaces) {
-        // ^ Iterer sur chaque personne enregistree.
-        //   knownFaces est un Map<String, List<Sample>> : nom → liste d'echantillons
+    if (scores.isEmpty()) return RecognitionResult("Unknown", Float.MAX_VALUE, "Unknown")
 
-        var sum = 0f
-        for (sample in samples) {
-            sum += euclideanDistance(embedding, sample.embedding)
-            // ^ Calculer la distance entre le nouveau visage et chaque echantillon
-        }
+    val (bestName, bestDistance) = scores.first()
+    val secondDistance = scores.getOrNull(1)?.second
+    val ambiguous = secondDistance != null &&
+        bestDistance < threshold &&
+        (secondDistance - bestDistance) < minMargin
+    // ^ Si le 2e est presque aussi proche que le 1er, on ne choisit pas : UNSURE.
 
-        val avg = sum / samples.size
-        // ^ Moyenne des distances. Plus il y a d'echantillons, plus c'est fiable.
-
-        if (avg < bestAvgDist) {
-            bestAvgDist = avg
-            bestName = name
-            // ^ Si cette personne est plus proche que toutes les autres, la retenir
-        }
-    }
-
-    val recognized = if (bestAvgDist < threshold) bestName else "Unknown"
-    // ^ Meme la meilleure distance doit etre en dessous du seuil.
-    //   Si aucun visage connu n'est assez proche → "Unknown"
-
-    return RecognitionResult(recognized, bestAvgDist, bestName)
+    val recognized = if (!ambiguous && bestDistance < threshold) bestName else "Unknown"
+    return RecognitionResult(recognized, bestDistance, bestName, ambiguous)
 }
 ```
+
+**Valeurs actuelles :** `DEFAULT_THRESHOLD = 1.0f`, `AMBIGUITY_MARGIN = 0.1f`, seuil reglable de 0.4 a 2.0 dans les parametres. Les anciennes valeurs `10.0f` sont ignorees.
 
 **La distance euclidienne :**
 
@@ -571,7 +569,7 @@ private fun euclideanDistance(a: FloatArray, b: FloatArray): Float {
 
 ### Etape 3 : Stabiliser les resultats
 
-Entre deux frames consecutifs, la reconnaissance peut fluctuer (frame 1 = "Ibrahim", frame 2 = "Unknown", frame 3 = "Ibrahim"). Le `FaceRecognitionStabilizer` exige que le meme nom apparaisse plusieurs fois de suite avant de l'afficher.
+Entre deux frames consecutifs, la reconnaissance peut fluctuer (frame 1 = "Ibrahim", frame 2 = "Unknown", frame 3 = "Ibrahim"). Le `FaceRecognitionStabilizer` exige que le meme nom apparaisse dans la majorite des 5 derniers votes avant de l'afficher. Une correspondance confiante (distance < seuil - 0.2) est acceptee immediatement. Si un vote est ambigu, le nom reste visible mais `unsure = true` : la presence n'est pas marquee, elle part en revue `UNSURE`.
 
 ---
 
@@ -586,11 +584,10 @@ Entre deux frames consecutifs, la reconnaissance peut fluctuer (frame 1 = "Ibrah
 Canvas(
     modifier = modifier
         .fillMaxSize()
-        .pointerInput(faces) {
-            // ^ pointerInput(faces) = reinitialiser le handler quand la liste de visages change.
-            //   C'est CRUCIAL : avec pointerInput(Unit), le handler capturerait la liste
-            //   vide du debut et ne verrait jamais les nouveaux visages.
-            //   Avec faces comme cle, le handler est recree a chaque changement.
+        .pointerInput(faces, rosterNames, isScanMode, onKnownFaceTap, unsureLabel) {
+            // ^ Tout etat LU par le handler fait partie des cles : visages, roster, mode,
+            //   callback et libelle UNSURE. Avec pointerInput(Unit), le handler capturerait
+            //   la liste vide du debut et ne verrait jamais les nouveaux visages.
 
             awaitEachGesture {
                 // ^ awaitEachGesture = envelopper chaque geste (tap, drag) dans un bloc.
@@ -1698,7 +1695,8 @@ data class ClassGroup(
     val studentNames: List<String>
     // ^ Liste des noms d'etudiants. Ce sont des REFERENCES vers les noms
     //   des visages enregistres dans FaceStorage. Pas de duplication des embeddings.
-    //   Si un visage est renomme dans ManageFacesScreen, il faut aussi le renommer ici.
+    //   MainViewModel.renamePerson() propage automatiquement un renommage ici,
+    //   dans toutes les sessions de presence et dans les rosters en attente.
 )
 ```
 
@@ -1878,23 +1876,24 @@ fun markAttendanceRecognized(name: String) {
     // ^ Ignorer les noms qui ne font pas partie de la classe.
     //   Un enseignant passant dans le couloir ne doit pas etre marque.
 
-    if (name in _attendancePresent.value) return
-    // ^ Deja present → ignorer (append-only).
-    //   IMPORTANT : une fois marque present, on ne retire JAMAIS.
-    //   Meme si le stabilisateur perd confiance plus tard.
-
-    _attendancePresent.value = _attendancePresent.value + name
-    // ^ Operateur + sur Set = creer un nouveau Set avec l'element ajoute.
-    //   Les StateFlow veulent de nouvelles references pour declencher la recomposition.
+    if (name !in _attendancePresent.value) {
+        _attendancePresent.value = _attendancePresent.value + name
+        _attendanceTimestamps.value = _attendanceTimestamps.value +
+            (name to System.currentTimeMillis())
+    }
+    _attendanceUnsure.value = _attendanceUnsure.value - name
+    // ^ Une correspondence devenue confiante quitte UNSURE et devient Present.
+    //   markAttendanceUnsure() fait l'inverse : Present n'est jamais devine.
 }
 
 fun finalizeAttendanceSession() {
     val classGroup = _selectedClass.value ?: return
     val present = _attendancePresent.value
+    val unsure = _attendanceUnsure.value - present
+    // ^ Un nom present et unsure a la fois est resolu en faveur de Present.
 
-    val absent = classGroup.studentNames.toSet() - present
-    // ^ Operateur - sur Set = tous les elements du roster QUI NE SONT PAS dans present.
-    //   C'est la liste des absents.
+    val absent = classGroup.studentNames.toSet() - present - unsure
+    // ^ Operateur - sur Set = tous les elements du roster QUI NE SONT NI presents NI unsure.
 
     val session = AttendanceSession(
         classId = classGroup.id,
@@ -1903,34 +1902,41 @@ fun finalizeAttendanceSession() {
         // ^ Timestamp actuel
 
         presentNames = present,
-        absentNames = absent
+        absentNames = absent,
+        unsureNames = unsure
+        // ^ UNSURE est un troisieme etat : les correspondances douteuses ne sont
+        //   jamais comptees comme Present automatiquement.
     )
     attendanceStorage.save(session)
     // ^ Sauvegarder dans le fichier JSON
 
     _attendanceSession.value = session
-    _currentScreen.value = AppScreen.ATTENDANCE_REVIEW
+    pushScreen(AppScreen.ATTENDANCE_REVIEW)
     // ^ Naviguer vers l'ecran de revue
 }
 
 fun toggleAttendanceStatus(name: String) {
     val session = _attendanceSession.value ?: return
-    // ^ Permettre la correction manuelle dans l'ecran de revue.
-    //   L'enseignant peut changer un present en absent et vice versa.
+    // ^ Correction manuelle : Present → Absent → UNSURE → Present.
 
-    if (name in session.presentNames) {
-        _attendanceSession.value = session.copy(
+    val updated = when {
+        name in session.presentNames -> session.copy(
             presentNames = session.presentNames - name,
-            absentNames = session.absentNames + name
+            absentNames = session.absentNames + name,
+            unsureNames = session.unsureNames - name
         )
-        // ^ Retirer des presents, ajouter aux absents
-    } else {
-        _attendanceSession.value = session.copy(
-            presentNames = session.presentNames + name,
-            absentNames = session.absentNames - name
+        name in session.absentNames -> session.copy(
+            absentNames = session.absentNames - name,
+            unsureNames = session.unsureNames + name
         )
-        // ^ Retirer des absents, ajouter aux presents
-    }
+        else -> session.copy(
+            unsureNames = session.unsureNames - name,
+            presentNames = session.presentNames + name
+        )
+    }.copy(timestamps = session.timestamps + (name to System.currentTimeMillis()))
+
+    _attendanceSession.value = updated
+    attendanceStorage.save(updated)
 }
 ```
 
@@ -1943,22 +1949,23 @@ Row {
         Text(present.size.toString())
         Text("Present")
     }
-    Card(containerColor = errorContainer) {
-        Text(absent.size.toString())
-        Text("Absent")
+    Card(containerColor = tertiaryContainer) {
+        Text(unsure.size.toString())
+        Text(stringResource(R.string.attendance_unsure))
     }
 }
-// ^ Deux cartes cote a cote : nombre de presents (couleur primaire)
-//   et nombre d'absents (couleur d'erreur).
+// ^ Trois cartes : presents (primaire), absents (erreur), INCERTAIN (tertiaire).
 
 // Chaque nom est affiche dans une Card cliquable :
 Card(onClick = onToggle) {
-    Icon(if (isPresent) CheckCircle else Cancel)
+    Icon(when (status) { PRESENT -> CheckCircle; ABSENT -> Cancel; UNSURE -> HelpOutline })
     Text(name)
+    Text(stringResource(status.labelRes))
     IconButton(onClick = onToggle) { Icon(SwapHoriz) }
     // ^ SwapHoriz = icone de fleches horizontales pour indiquer "changer"
 }
-// ^ Tapoter n'importe ou sur la carte inverse le statut present/absent.
+// ^ Tapoter la carte fait cycle Present → Absent → INCERTAIN → Present.
+//   Tous les textes affiches viennent de strings.xml (EN + FR).
 ```
 
 ---
@@ -1998,12 +2005,18 @@ Enseignant entre le nom de la classe
 
 ```kotlin
 // MainViewModel.kt
-fun startScanForClass(className: String, existingClassId: String? = null) {
+fun startScanForClass(
+    className: String,
+    existingClassId: String? = null,
+    existingStudents: List<String> = emptyList()
+) {
     _pendingClassName.value = className
     // ^ Nom de la classe en cours de creation
 
-    _pendingClassRoster.value = emptyList()
-    // ^ Liste des noms ajoutes jusqu'a present. Vide au debut.
+    _pendingClassRoster.value = existingStudents
+    // ^ Quand on EDITE une classe, le roster demarre avec les etudiants deja inscrits.
+    //   Les visages deja connus apparaissent en orange et on peut les ajouter d'un tap.
+    //   Le code precedent utilisait emptyList() et perdait les etudiants existants.
 
     pendingClassId = existingClassId
     // ^ Si on edite une classe existante, garder son ID.
@@ -2115,7 +2128,7 @@ Enseignant entre le nom de la classe
          │
          ▼
 ┌─────────────────┐
-│  Face Detection  │  ML Kit detecte tous les visages
+│  Face Detection  │  BlazeFace TFLite detecte tous les visages
 │  + Crop          │  Chaque visage est decoupe
 └────────┬────────┘
          │
@@ -2161,7 +2174,7 @@ fun processImageForClass(className: String, bitmap: Bitmap, faceDetector: FaceDe
                             val w = (bounds.right - bounds.left).coerceIn(1, bitmap.width - left)
                             val h = (bounds.bottom - bounds.top).coerceIn(1, bitmap.height - top)
                             // ^ coerceIn = forcer les coordonnees a rester dans les limites du bitmap.
-                            //   Evite les crashs si ML Kit renvoie un rectangle qui depasse.
+                            //   Evite les crashs si le detecteur renvoie un rectangle qui depasse.
 
                             try {
                                 crops.add(Bitmap.createBitmap(bitmap, left, top, w, h))
@@ -2597,40 +2610,38 @@ val filtered = remember(classGroup.studentNames, studentSearch) {
 @Composable
 fun SettingsScreen(viewModel: MainViewModel) {
     Column {
-        // 1. Apparence — toggle dark theme
+        // 1. Apparence — theme sombre + langue (system / en / fr)
         Card {
-            Row {
-                Icon(if (darkTheme) DarkMode else LightMode)
-                Text("Dark theme")
-                Switch(checked = darkTheme, onCheckedChange = { viewModel.toggleDarkTheme() })
-            }
+            Text(stringResource(R.string.settings_title))
+            // ^ TOUS les textes affiches viennent de strings.xml, jamais en dur.
         }
 
-        // 2. Reconnaissance — seuil et taille minimum
+        // 2. Reconnaissance — seuil reglable + taille minimum fixe
         Card {
-            Text("Threshold: ${FaceRecognitionHelper.DEFAULT_THRESHOLD}")
+            Text(stringResource(R.string.recognition_threshold_label, recognitionThreshold))
+            Slider(
+                value = recognitionThreshold,
+                onValueChange = { viewModel.setRecognitionThreshold(it) },
+                valueRange = 0.4f..2.0f
+            )
             // ^ Plus petit = plus strict. Plus grand = plus permissif.
-            Text("Min face size: 15% of image")
-            // ^ Changer cette valeur necessite de modifier le code dans MainActivity.kt
+            //   Le seuil est sauvegarde dans DataStore (ThemePreferences).
+            Text(stringResource(R.string.min_face_size_hint))
+            // ^ BlazeFace ignore les visages < 24 px ; seuil de score 0.5.
         }
 
-        // 3. Donnees — nettoyer l'historique ou tout supprimer
+        // 3. Donnees — backup/restore local, nettoyage de l'historique ou tout supprimer
         Card {
-            Text("${classes.size} class(es) created")
-            OutlinedButton(onClick = { showClearHistoryConfirm = true }) {
-                Text("Clear Attendance History")
-            }
-            ElevatedButton(onClick = { showClearAllConfirm = true }) {
-                Text("Delete All Data")
-                // ^ Supprime TOUT : visages enregistres, classes, historique
-            }
+            Text(stringResource(R.string.classes_created, classes.size))
+            Button(onClick = { BackupManager.createBackup(context) }) { /* ... */ }
+            // ^ Sauvegarde ZIP locale. La restauration rejette les chemins Zip Slip.
         }
 
         // 4. About — informations techniques
         Card {
-            Text("FaceRecognition")
-            Text("Face detection: ML Kit | Recognition: FaceNet TFLite")
-            Text("Camera: CameraX | UI: Jetpack Compose")
+            Text(stringResource(R.string.about_tech_face))
+            Text(stringResource(R.string.about_tech_recognition))
+            // ^ Le texte dit desormais BlazeFace TFLite, pas ML Kit.
         }
     }
 }
@@ -2793,8 +2804,11 @@ viewModel.exportAttendance(context, AttendanceExporter.Scope.BOTH)
 fun exportAttendance(context: Context, scope: AttendanceExporter.Scope) {
     // ^ context = Activity context recu du composable
     val session = _attendanceSession.value ?: return
-    AttendanceExporter.exportAndShare(context, session, scope)
-    // ^ context.startActivity() fonctionne car c'est un Activity context
+    val csv = AttendanceExporter.buildCsv(session, scope)
+    // ^ Scope = PRESENT_ONLY / ABSENT_ONLY / UNSURE_ONLY / BOTH.
+    //   Les lignes UNSURE portent le statut "UNSURE" dans la colonne Status.
+    AttendanceExporter.writeToUri(context, uri, csv)
+    // ^ L'URI vient de ACTION_CREATE_DOCUMENT : aucun permission de stockage.
 }
 ```
 
@@ -2806,9 +2820,12 @@ fun exportAttendance(context: Context, scope: AttendanceExporter.Scope) {
 
 ```kotlin
 // FaceRecognitionHelper.kt
-const val DEFAULT_THRESHOLD = 10.0f
-// ^ Plus petit (ex: 8.0f) = plus strict (moins de faux positifs, mais plus de "Unknown")
-//   Plus grand (ex: 12.0f) = plus permissif (plus de reconnaissances, mais risque de confusion)
+const val DEFAULT_THRESHOLD = 1.0f
+const val AMBIGUITY_MARGIN = 0.1f
+// ^ Distance euclidienne entre embeddings normalises (longueur 1).
+//   Plus petit (ex: 0.6f) = plus strict ; plus grand (ex: 1.6f) = plus permissif.
+//   L'utilisateur regle le seuil dans Settings (0.4..2.0), sauvegarde dans DataStore.
+//   Les anciennes valeurs 10.0f sont ignorees au chargement.
 ```
 
 ### Changer les couleurs des cadres
@@ -2841,10 +2858,12 @@ delay(2000)
 ### Changer la taille minimum des visages
 
 ```kotlin
-// MainActivity.kt
-.setMinFaceSize(0.15f)
-// ^ 0.15 = 15% de l'image. Plus petit (0.10) = detecte des visages plus petits.
-//   Plus grand (0.25) = ignore les visages eloignes.
+// BlazeFaceDetector.kt — companion object
+private const val MIN_FACE_PX = 24
+private const val SCORE_THRESHOLD = 0.5f
+// ^ La taille est en pixels dans l'image analysee, pas en pourcentage.
+//   Plus petit (16) = detecte des visages plus lointains mais plus de faux positifs.
+//   Plus grand (40) = ignore les visages eloignes.
 ```
 
 ### Ajouter un nouveau bouton
@@ -2855,4 +2874,65 @@ delay(2000)
 
 ### Changer le modele d'IA
 
-Remplacer `facenet.tflite` dans le dossier `assets` par un autre modele TFLite. Changer `embeddingDim` dans `FaceRecognitionHelper` si le nouveau modele produit un nombre different de valeurs.
+Remplacer `facenet.tflite` dans le dossier `assets` par un autre modele TFLite. Changer `embeddingDim` dans `FaceRecognitionHelper` si le nouveau modele produit un nombre different de valeurs. Le detecteur reste `blaze_face_full_range.tflite` (192×192, 48×48 grille).
+
+---
+
+## Securite et confidentialite
+
+Aucune permission `INTERNET`, aucune analytique, aucun service cloud. Tout se passe dans `filesDir/`.
+
+```kotlin
+// FaceStorage.kt — chiffrement AES-GCM
+private val key: SecretKey by lazy { getOrCreateKey() }
+// ^ Cle 256 bits dans le Android Keystore. La cle ne sort jamais du device.
+
+private fun encrypt(plain: ByteArray): ByteArray {
+    val iv = ByteArray(12).also { secureRandom.nextBytes(it) }
+    // ^ IV aleatoire pour chaque fichier : deux images identiques donnent deux cryptogrammes differents.
+    ...
+}
+```
+
+**Migration :** les anciens fichiers en clair sont lus, rechiffres, puis seulement alors supprimes. Si le chiffrement echoue, l'original est conserve — aucune perte de donnees.
+
+**Sauvegarde manuelle :** `BackupManager` ecrit un ZIP local. `safeRelativePath()` rejette les chemins absolus, `..`, et tout ce qui n'est pas dans `enrolled_faces/`, `classes/` ou `attendance/` (protection Zip Slip). Le backup automatique Android est desactive dans le manifeste.
+
+---
+
+## Renommage d'une personne
+
+Les noms servent de cle d'identite dans `ClassGroup.studentNames` et dans les sessions de presence. Un renommage dans **Manage Faces** declenche donc trois recritures dans la meme coroutine IO :
+
+```kotlin
+// MainViewModel.kt — renamePerson()
+withContext(Dispatchers.IO) {
+    faceRecognitionHelper.renamePerson(oldName, trimmedNew)
+    classStorage.renameStudentEverywhere(oldName, trimmedNew)
+    attendanceStorage.renameStudentEverywhere(oldName, trimmedNew)
+}
+```
+
+`AttendanceStorage` reecrit aussi les cles de `timestamps` et garde le timestamp le plus recent en cas de collision. Aucun identifiant stable n'a ete introduit : c'est le choix explicite de la phase 5 (migration des donnees jugee trop risquee).
+
+---
+
+## Tests et outil d'evaluation
+
+Tests JVM (sans appareil, sans modele TFLite charge) :
+
+```bash
+./gradlew test --no-daemon --max-workers=1
+```
+
+Ils couvrent `recognizeEmbedding` (normalisation, moyenne des 3 meilleurs, ambiguite), `FaceRecognitionStabilizer` (vote majoritaire, UNSURE, purge) et `AttendanceExporter` (CSV, echappement, scopes).
+
+Pour mesurer la precision sur tes propres images :
+
+```bash
+mkdir -p eval/images
+# copier eval/images/<Nom>/photo1.jpg, photo2.jpg, ...
+python3 tools/eval_recognition.py --model app/src/main/assets/facenet.tflite
+```
+
+Le script applique exactement la meme regle que l'app et ecrit `eval/report.csv` avec un seuil suggere. **Le dossier `eval/` est ignore par Git et aucune vraie photo d'etudiant n'est fournie dans le depot.**

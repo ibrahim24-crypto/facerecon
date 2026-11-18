@@ -13,3 +13,12 @@ key
 *.logcat
 session android.md
 Liquid-Glass-Android-2.0.11/
+
+# Local evaluation data (may contain real student photos) and generated reports
+eval/
+
+# Untracked model downloads and generated data/backup/export files
+*.tflite
+*.enc
+*.csv
+*.zip

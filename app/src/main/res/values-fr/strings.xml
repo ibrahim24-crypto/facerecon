@@ -84,4 +84,19 @@
     <string name="delete_all_message">Tous les visages enregistrés, toutes les classes et tout l\'historique seront supprimés. Cette action est irréversible.</string>
     <string name="delete_everything">Tout supprimer</string>
     <string name="all_data_deleted">Toutes les données ont été supprimées</string>
+
+    <!-- Settings sections -->
+    <string name="settings_appearance">Apparence</string>
+    <string name="settings_dark_theme">Thème sombre</string>
+    <string name="settings_manage">Gérer</string>
+    <string name="settings_enrolled_faces">Visages enregistrés</string>
+    <string name="settings_classes">Classes</string>
+    <string name="settings_data">Données</string>
+    <string name="classes_created">%1$d classe(s) créée(s)</string>
+    <string name="backup">Sauvegarde</string>
+    <string name="restore">Restaurer</string>
+    <string name="clear_attendance_history">Effacer l\'historique des présences</string>
+    <string name="delete_all_data">Supprimer toutes les données</string>
+    <string name="app_display_name">FaceRecognition</string>
+    <string name="cancel">Annuler</string>
 </resources>

@@ -1,5 +1,9 @@
 # Face Recognition Attendance App
 
+**FaceRecon** is an offline, on-device face-recognition attendance app for classrooms. Enroll students once, point the camera at a class (or use a group photo), and the app marks Present / Absent / UNSURE, with a review screen and CSV export. It uses BlazeFace + FaceNet TFLite models, encrypts face data with Android Keystore, and has no internet permission, analytics, or cloud sync.
+
+📦 **Download the latest signed APK:** [GitHub Releases — Android](https://github.com/ibrahim24-crypto/facerecon/releases/tag/Android)
+
 ---
 
 ## English 🇬🇧
@@ -28,7 +32,7 @@
 ### 🚀 Getting Started
 
 #### Installation
-1. Download and install the app on your Android device (API 24+)
+1. Download and install the app on your Android device (API 27+)
 2. Grant permissions for:
    - **Camera**: Required for face detection
    - **File Access**: Required for saving attendance reports (Android 13+)
@@ -53,13 +57,14 @@
    - Tap **"Start Attendance Session"**
    - Point camera at students
    - **Green box** = Recognized student (automatically marked present)
+   - **Amber box `UNSURE`** = close match between two students; routed to review, never silently marked present
    - **Red box** = Unknown face
    - The app updates attendance in real-time
 
 #### **3. Review & Export**
    - After the session, tap **"Review Attendance"**
-   - See all recognized students with ✓ (present) or ✗ (absent)
-   - Manually correct any errors if needed
+   - See every student with ✓ (Present), ✗ (Absent), or `UNSURE` (needs review)
+   - Tap a name to cycle Present → Absent → UNSURE; export Present, Absent, Unsure, or All rows
    - Tap **"Export as CSV"** to save the report
 
 #### **4. Manage Classes**
@@ -93,16 +98,32 @@ Access settings from the main menu:
 - No heavy filters or dramatic changes to appearance
 - If recognition fails, manually tap the student's name to mark them present
 
+### 🧪 Verify and tune recognition (local only)
+
+Unit tests run on the JVM without a device:
+
+```bash
+./gradlew test --no-daemon --max-workers=1
+```
+
+To measure accuracy on **your own** images, put them in `eval/images/<Student Name>/*.jpg`, then run:
+
+```bash
+python3 tools/eval_recognition.py --model app/src/main/assets/facenet.tflite
+```
+
+The script applies the same rule as the app (L2-normalized embeddings, best-3 averaging, ambiguity margin) and writes `eval/report.csv` plus a threshold suggestion. It needs `pip install pillow numpy tflite-runtime`. The `eval/` folder is git-ignored; **no real student photos are included in this repository**.
+
 ### ❓ FAQ
 
 **Q: How accurate is the face recognition?**
-A: The app uses Google ML Kit and TensorFlow Lite for recognition. Accuracy is typically 95%+ in good lighting conditions.
+A: The app uses a BlazeFace TFLite detector and a FaceNet TFLite recognizer, both on-device. Accuracy depends on lighting and on how many good samples were enrolled; use the local eval tool below to measure it on your own images.
 
 **Q: Can I export attendance to Excel?**
 A: Yes! Export as CSV and open in Excel, Google Sheets, or any spreadsheet app.
 
 **Q: Is my data stored in the cloud?**
-A: No. All data is stored locally on your device for privacy.
+A: No. There is no INTERNET permission and no analytics. Face images and embeddings are encrypted with an AES-GCM key held by the Android Keystore, and Android auto-backup is disabled. All data stays on your device unless you export a CSV or create a backup yourself.
 
 **Q: What if the app doesn't recognize a face?**
 A: You can manually mark students as present/absent by tapping their name in the review screen.
@@ -137,7 +158,7 @@ A: Yes! The app works completely offline. Export data anytime.
 ### 🚀 Commencer
 
 #### Installation
-1. Téléchargez et installez l'app sur votre appareil Android (API 24+)
+1. Téléchargez et installez l'app sur votre appareil Android (API 27+)
 2. Accordez les permissions pour:
    - **Caméra**: Nécessaire pour la détection faciale
    - **Accès aux fichiers**: Requis pour sauvegarder les rapports (Android 13+)
@@ -162,13 +183,14 @@ A: Yes! The app works completely offline. Export data anytime.
    - Appuyez sur **"Démarrer la session de présence"**
    - Pointez la caméra vers les étudiants
    - **Cadre vert** = Étudiant reconnu (marqué présent automatiquement)
+   - **Cadre orange `INCERTAIN`** = correspondance proche entre deux étudiants ; envoyé à la revue, jamais marqué présent automatiquement
    - **Cadre rouge** = Visage inconnu
    - L'app met à jour les présences en temps réel
 
 #### **3. Réviser et exporter**
    - Après la session, appuyez sur **"Réviser les présences"**
-   - Voyez tous les étudiants avec ✓ (présent) ou ✗ (absent)
-   - Corrigez manuellement si nécessaire
+   - Voyez tous les étudiants avec ✓ (Présent), ✗ (Absent) ou `INCERTAIN` (à vérifier)
+   - Touchez un nom pour changer Présent → Absent → INCERTAIN ; exportez Présents, Absents, Incertains ou Tous
    - Appuyez sur **"Exporter en CSV"** pour sauvegarder le rapport
 
 #### **4. Gérer les classes**
@@ -202,16 +224,32 @@ Accédez aux paramètres depuis le menu principal:
 - Pas de filtres lourds ou changements dramatiques d'apparence
 - Si la reconnaissance échoue, appuyez manuellement sur le nom de l'étudiant
 
+### 🧪 Vérifier et régler la reconnaissance (local uniquement)
+
+Les tests unitaires s'exécutent sur la JVM sans appareil :
+
+```bash
+./gradlew test --no-daemon --max-workers=1
+```
+
+Pour mesurer la précision sur **vos propres** images, placez-les dans `eval/images/<Nom de l'étudiant>/*.jpg`, puis lancez :
+
+```bash
+python3 tools/eval_recognition.py --model app/src/main/assets/facenet.tflite
+```
+
+Le script applique la même règle que l'app (embeddings normalisés L2, moyenne des 3 meilleurs, marge d'ambiguïté) et écrit `eval/report.csv` avec un seuil suggéré. Dépendances : `pip install pillow numpy tflite-runtime`. Le dossier `eval/` est ignoré par Git ; **aucune vraie photo d'étudiant n'est incluse dans ce dépôt**.
+
 ### ❓ FAQ
 
 **Q: Quelle est la précision de la reconnaissance faciale?**
-R: L'app utilise Google ML Kit et TensorFlow Lite. La précision est généralement >95% en bon éclairage.
+R: L'app utilise BlazeFace TFLite pour la détection et FaceNet TFLite pour la reconnaissance, entièrement sur l'appareil. La précision dépend de l'éclairage et du nombre de bons échantillons ; utilisez l'outil d'évaluation local ci-dessous pour la mesurer sur vos propres images.
 
 **Q: Puis-je exporter vers Excel?**
 R: Oui! Exportez en CSV et ouvrez dans Excel, Google Sheets, ou toute application de feuille de calcul.
 
 **Q: Mes données sont-elles stockées dans le cloud?**
-R: Non. Toutes les données sont stockées localement sur l'appareil pour la confidentialité.
+R: Non. Aucune permission INTERNET et aucune analytique. Les images et embeddings sont chiffrés en AES-GCM avec une clé du Android Keystore, et la sauvegarde automatique Android est désactivée. Vous seul décidez d'exporter un CSV ou une sauvegarde.
 
 **Q: Que faire si l'app ne reconnaît pas un visage?**
 R: Vous pouvez marquer manuellement les étudiants en appuyant sur leur nom.
@@ -246,7 +284,7 @@ R: Oui! L'app fonctionne complètement hors ligne. Exportez les données quand v
 ### 🚀 البدء
 
 #### التثبيت
-1. حمّل وثبّت التطبيق على جهازك الذكي (API 24+)
+1. حمّل وثبّت التطبيق على جهازك الذكي (API 27+)
 2. امنح الأذونات المطلوبة:
    - **الكاميرا**: ضروري للكشف عن الوجوه
    - **الوصول للملفات**: مطلوب لحفظ التقارير (Android 13+)
@@ -314,13 +352,13 @@ R: Oui! L'app fonctionne complètement hors ligne. Exportez les données quand v
 ### ❓ أسئلة شائعة
 
 **س: ما دقة التعرف على الوجوه؟**
-ج: يستخدم التطبيق Google ML Kit و TensorFlow Lite. الدقة عادة >95% في الإضاءة الجيدة.
+ج: يستخدم التطبيق BlazeFace TFLite للكشف و FaceNet TFLite للتعرف، كل ذلك على الجهاز. تعتمد الدقة على الإضاءة وعدد العينات المسجلة.
 
 **س: هل يمكنني التصدير إلى Excel؟**
 ج: نعم! صدّر كـ CSV وافتحه في Excel أو Google Sheets أو أي تطبيق جداول.
 
 **س: هل يتم تخزين بيانات في السحابة؟**
-ج: لا. جميع البيانات مخزنة محلياً على الجهاز لحماية الخصوصية.
+ج: لا. لا يوجد إذن إنترنت ولا تحليلات. صور الوجوه مشفرة بمفتاح Android Keystore، والنسخ التلقائي معطل.
 
 **س: ماذا لو لم يتعرف التطبيق على وجه؟**
 ج: يمكنك تسجيل الطالب يدوياً بالضغط على اسمه.
@@ -333,14 +371,14 @@ R: Oui! L'app fonctionne complètement hors ligne. Exportez les données quand v
 ## Technical Details / Détails techniques / التفاصيل التقنية
 
 ### Requirements / Exigences / المتطلبات
-- Android 7.0+ (API 24+)
+- Android 7.0+ (API 27+)
 - Camera permission
 - Storage permission (Android 13+)
 - ~50 MB disk space
 
 ### Technologies / Technologies utilisées / التقنيات المستخدمة
-- Google ML Kit Face Detection
-- TensorFlow Lite FaceNet
+- BlazeFace TFLite face detection (`blaze_face_full_range.tflite`)
+- TensorFlow Lite FaceNet recognition (`facenet.tflite`, 128-d, L2-normalized)
 - Jetpack Compose + Material 3 (Material You)
 - DataStore Preferences
 - CameraX
@@ -350,9 +388,23 @@ R: Oui! L'app fonctionne complètement hors ligne. Exportez les données quand v
 - Build Target: Android 15 (API 35)
 - Minimum: Android 8.1 (API 27)
 
+### Privacy / Confidentialité / الخصوصية
+- No INTERNET permission, no analytics, no cloud sync.
+- Face images and embeddings are AES-GCM encrypted with a key in the Android Keystore; legacy plaintext files are migrated on first read.
+- Android auto-backup is disabled. Manual backup/restore is local and rejects zip-slip paths.
+- Everything is stored under `filesDir/`; CSV and backup exports go only to a location you pick.
+
+### Renaming a person / Renommer une personne / إعادة تسمية شخص
+Names are the identity key in class rosters and attendance history. Renaming a person in **Manage Faces** now updates the enrolled face, every class roster, every attendance session, and live pending rosters in one pass. Therefore an old name must not remain in CSV exports after a rename.
+
+### Build and verify / Construire et vérifier / البناء والتحقق
+```bash
+./gradlew assembleDebug test --no-daemon --max-workers=1
+```
+
 ### Build a signed release
 
-The release signing key is expected at the repository root as `key` and is intentionally ignored by Git. Configure these values locally through Gradle properties or environment variables before building; do not commit signing credentials:
+The preferred release signing key is the repository-root `release-key.jks` (with root `key` as a fallback for older local setups). Both are intentionally ignored by Git. Configure these values locally through Gradle properties or environment variables before building; do not commit signing credentials:
 
 | Gradle property | Environment variable |
 |-----------------|----------------------|
@@ -371,4 +423,4 @@ Pour les problèmes ou demandes de fonctionnalités, veuillez contacter l'équip
 
 ---
 
-*Last Updated: October 2026 / Dernière mise à jour: Octobre 2026 / آخر تحديث: أكتوبر 2026*
+*Last Updated: November 2026 / Dernière mise à jour: Novembre 2026 / آخر تحديث: نوفمبر 2026*
