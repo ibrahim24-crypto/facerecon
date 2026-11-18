@@ -88,7 +88,7 @@ fun SettingsScreen(
         val data = pendingBackupData
         if (uri != null && data != null) {
             context.contentResolver.openOutputStream(uri)?.use { it.write(data) }
-            Toast.makeText(context, "Backup saved", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.backup_saved), Toast.LENGTH_SHORT).show()
         }
         pendingBackupData = null
     }
@@ -98,9 +98,9 @@ fun SettingsScreen(
     ) { uri ->
         if (uri != null) {
             if (BackupManager.restoreBackup(context, uri)) {
-                Toast.makeText(context, "Restored. Restart app to apply.", Toast.LENGTH_LONG).show()
+                Toast.makeText(context, context.getString(R.string.restore_applied), Toast.LENGTH_LONG).show()
             } else {
-                Toast.makeText(context, "Restore failed", Toast.LENGTH_SHORT).show()
+                Toast.makeText(context, context.getString(R.string.restore_failed), Toast.LENGTH_SHORT).show()
             }
         }
     }
@@ -108,14 +108,14 @@ fun SettingsScreen(
     if (showClearHistoryConfirm) {
         AlertDialog(
             onDismissRequest = { showClearHistoryConfirm = false },
-            title = { Text("Clear all history?") },
-            text = { Text("This will delete all attendance session records for all classes. This cannot be undone.") },
+            title = { Text(stringResource(R.string.clear_history_title)) },
+            text = { Text(stringResource(R.string.clear_history_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.clearAllAttendanceHistory()
                     showClearHistoryConfirm = false
-                    Toast.makeText(context, "History cleared", Toast.LENGTH_SHORT).show()
-                }) { Text("Clear") }
+                    Toast.makeText(context, context.getString(R.string.history_cleared), Toast.LENGTH_SHORT).show()
+                }) { Text(stringResource(R.string.clear)) }
             },
             dismissButton = {
                 TextButton(onClick = { showClearHistoryConfirm = false }) { Text("Cancel") }
@@ -126,14 +126,14 @@ fun SettingsScreen(
     if (showClearAllConfirm) {
         AlertDialog(
             onDismissRequest = { showClearAllConfirm = false },
-            title = { Text("Delete all data?") },
-            text = { Text("This will delete ALL enrolled faces, classes, and attendance history. This cannot be undone.") },
+            title = { Text(stringResource(R.string.delete_all_title)) },
+            text = { Text(stringResource(R.string.delete_all_message)) },
             confirmButton = {
                 TextButton(onClick = {
                     viewModel.deleteAllData()
                     showClearAllConfirm = false
-                    Toast.makeText(context, "All data deleted", Toast.LENGTH_SHORT).show()
-                }) { Text("Delete Everything") }
+                    Toast.makeText(context, context.getString(R.string.all_data_deleted), Toast.LENGTH_SHORT).show()
+                }) { Text(stringResource(R.string.delete_everything)) }
             },
             dismissButton = {
                 TextButton(onClick = { showClearAllConfirm = false }) { Text("Cancel") }
@@ -145,10 +145,13 @@ fun SettingsScreen(
         modifier = modifier,
         topBar = {
             TopAppBar(
-                title = { Text("Settings", fontWeight = FontWeight.SemiBold) },
+                title = { Text(stringResource(R.string.settings_title), fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.navigateToMain() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back)
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

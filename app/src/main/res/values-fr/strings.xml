@@ -70,4 +70,18 @@
     <string name="back">Retour</string>
     <string name="dismiss">Ignorer</string>
     <string name="toggle">Changer</string>
+
+    <!-- Settings / data safety -->
+    <string name="settings_title">Paramètres</string>
+    <string name="backup_saved">Sauvegarde enregistrée</string>
+    <string name="restore_applied">Restauration effectuée. Redémarrez l\'application.</string>
+    <string name="restore_failed">Échec de la restauration</string>
+    <string name="clear_history_title">Effacer tout l\'historique ?</string>
+    <string name="clear_history_message">Toutes les sessions de présence de toutes les classes seront supprimées. Cette action est irréversible.</string>
+    <string name="clear">Effacer</string>
+    <string name="history_cleared">Historique effacé</string>
+    <string name="delete_all_title">Supprimer toutes les données ?</string>
+    <string name="delete_all_message">Tous les visages enregistrés, toutes les classes et tout l\'historique seront supprimés. Cette action est irréversible.</string>
+    <string name="delete_everything">Tout supprimer</string>
+    <string name="all_data_deleted">Toutes les données ont été supprimées</string>
 </resources>

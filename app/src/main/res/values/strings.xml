@@ -113,4 +113,18 @@
     <string name="back">Back</string>
     <string name="dismiss">Dismiss</string>
     <string name="toggle">Toggle</string>
+
+    <!-- Settings / data safety -->
+    <string name="settings_title">Settings</string>
+    <string name="backup_saved">Backup saved</string>
+    <string name="restore_applied">Restored. Restart app to apply.</string>
+    <string name="restore_failed">Restore failed</string>
+    <string name="clear_history_title">Clear all history?</string>
+    <string name="clear_history_message">This will delete all attendance session records for all classes. This cannot be undone.</string>
+    <string name="clear">Clear</string>
+    <string name="history_cleared">History cleared</string>
+    <string name="delete_all_title">Delete all data?</string>
+    <string name="delete_all_message">This will delete ALL enrolled faces, classes, and attendance history. This cannot be undone.</string>
+    <string name="delete_everything">Delete Everything</string>
+    <string name="all_data_deleted">All data deleted</string>
 </resources>
