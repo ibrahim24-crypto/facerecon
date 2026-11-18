@@ -3,9 +3,20 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
+val releaseStoreFile = rootProject.file("key")
+val releaseStorePassword = providers.gradleProperty("facereconReleaseStorePassword")
+    .orElse(providers.environmentVariable("FACERECON_RELEASE_STORE_PASSWORD"))
+    .orNull
+val releaseKeyAlias = providers.gradleProperty("facereconReleaseKeyAlias")
+    .orElse(providers.environmentVariable("FACERECON_RELEASE_KEY_ALIAS"))
+    .orNull
+val releaseKeyPassword = providers.gradleProperty("facereconReleaseKeyPassword")
+    .orElse(providers.environmentVariable("FACERECON_RELEASE_KEY_PASSWORD"))
+    .orNull
+
 android {
     namespace = "com.himo.facerecon"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.himo.facerecon"
@@ -13,18 +24,18 @@ android {
         minSdk = 27
         // Keep targetSdk equal to compileSdk for best compatibility with latest OS behavior
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     signingConfigs {
         create("release") {
-            storeFile = file("release-key.jks")
-            storePassword = "facerecon123"
-            keyAlias = "facerecon"
-            keyPassword = "facerecon123"
+            storeFile = releaseStoreFile
+            storePassword = releaseStorePassword
+            keyAlias = releaseKeyAlias
+            keyPassword = releaseKeyPassword
         }
     }
 
@@ -56,15 +67,31 @@ android {
     }
 }
 
+tasks.configureEach {
+    if (name == "validateSigningRelease") {
+        doFirst {
+            val missing = buildList {
+                if (!releaseStoreFile.isFile) add("root/key signing file")
+                if (releaseStorePassword.isNullOrBlank()) add("FACERECON_RELEASE_STORE_PASSWORD")
+                if (releaseKeyAlias.isNullOrBlank()) add("FACERECON_RELEASE_KEY_ALIAS")
+                if (releaseKeyPassword.isNullOrBlank()) add("FACERECON_RELEASE_KEY_PASSWORD")
+            }
+            if (missing.isNotEmpty()) {
+                throw GradleException(
+                    "Release signing is not configured. Missing: ${missing.joinToString()}. " +
+                        "Set these locally via Gradle properties or environment variables; never commit them."
+                )
+            }
+        }
+    }
+}
+
 kotlin {
     jvmToolchain(8)
 }
 
 dependencies {
     implementation(libs.androidx.core.ktx)
-    implementation("androidx.appcompat:appcompat:1.6.1")
-    implementation("com.google.android.material:material:1.11.0")
-    implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
     // CameraX
     implementation("androidx.camera:camera-core:1.3.1")

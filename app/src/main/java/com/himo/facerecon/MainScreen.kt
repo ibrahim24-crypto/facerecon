@@ -258,49 +258,49 @@ fun MainScreen(
             }
         }
     ) {
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            TopAppBar(
-                title = {
-                    Text(
-                        text = stringResource(R.string.app_title),
-                        style = MaterialTheme.typography.titleLarge
+        Box(modifier = Modifier.fillMaxSize()) {
+            Scaffold(
+                modifier = Modifier.fillMaxSize(),
+                topBar = {
+                    TopAppBar(
+                        title = {
+                            Text(
+                                text = stringResource(R.string.app_title),
+                                style = MaterialTheme.typography.titleLarge
+                            )
+                        },
+                        navigationIcon = {
+                            IconButton(onClick = { scope.launch { drawerState.open() } }) {
+                                Icon(
+                                    imageVector = Icons.Default.Menu,
+                                    contentDescription = "Menu"
+                                )
+                            }
+                        },
+                        actions = {
+                            IconButton(onClick = viewModel::navigateToSettings) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = "Settings"
+                                )
+                            }
+                        },
+                        colors = TopAppBarDefaults.topAppBarColors(
+                            titleContentColor = MaterialTheme.colorScheme.onSurface,
+                            navigationIconContentColor = MaterialTheme.colorScheme.onSurface,
+                            actionIconContentColor = MaterialTheme.colorScheme.onSurface
+                        )
                     )
-                },
-                navigationIcon = {
-                    IconButton(onClick = { scope.launch { drawerState.open() } }) {
-                        Icon(
-                            imageVector = Icons.Default.Menu,
-                            contentDescription = "Menu"
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = viewModel::navigateToSettings) {
-                        Icon(
-                            imageVector = Icons.Default.Settings,
-                            contentDescription = "Settings"
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.primaryContainer,
-                    titleContentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                )
-            )
-        }
-    ) { padding ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-        ) {
+                }
+            ) { padding ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(padding)
+                ) {
             if (currentMode != Mode.ATTENDANCE && currentMode != Mode.SCAN) {
                 PrimaryTabRow(
                     selectedTabIndex = if (currentMode == Mode.CAMERA) 0 else 1,
-                containerColor = MaterialTheme.colorScheme.surface,
                 contentColor = MaterialTheme.colorScheme.primary
             ) {
                 Tab(
@@ -370,9 +370,6 @@ fun MainScreen(
                             .align(Alignment.TopCenter)
                             .padding(top = 8.dp),
                         shape = MaterialTheme.shapes.medium,
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
-                        )
                     ) {
                         Row(
                             modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -404,9 +401,6 @@ fun MainScreen(
                             .align(Alignment.TopCenter)
                             .padding(top = 8.dp),
                         shape = MaterialTheme.shapes.large,
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.95f)
-                        )
                     ) {
                         Column(
                             modifier = Modifier.padding(16.dp),
@@ -564,8 +558,9 @@ fun MainScreen(
                 }
             }
             } // end if (!ATTENDANCE) for bottom buttons
-        }
-    }
+                }
+            } // end Scaffold
+        } // end gradient background Box
     } // end ModalNavigationDrawer
 }
 
@@ -620,9 +615,6 @@ private fun RegisterTabContent(
                 .padding(16.dp),
             shape = MaterialTheme.shapes.large,
             elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
-            colors = CardDefaults.cardColors(
-                containerColor = MaterialTheme.colorScheme.surface
-            )
         ) {
             Column(
                 modifier = Modifier
@@ -745,7 +737,7 @@ private fun AttendanceChecklist(
                 .fillMaxWidth()
                 .padding(16.dp),
             shape = MaterialTheme.shapes.large,
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         ) {
             Column(
                 modifier = Modifier
@@ -812,7 +804,7 @@ private fun ScanRosterCard(
                 .fillMaxWidth()
                 .padding(16.dp),
             shape = MaterialTheme.shapes.large,
-            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
         ) {
             Column(
                 modifier = Modifier
@@ -838,9 +830,7 @@ private fun ScanRosterCard(
                         items(roster, key = { it }) { name ->
                             Card(
                                 shape = MaterialTheme.shapes.small,
-                                colors = CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.primaryContainer
-                                )
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
                             ) {
                                 Row(
                                     modifier = Modifier.padding(start = 10.dp, end = 2.dp, top = 4.dp, bottom = 4.dp),
@@ -933,7 +923,7 @@ private fun processFrame(
                 for (face in detectedFaces) {
                     try {
                         val bounds = face.bounds
-                        val faceBitmap = cropBitmap(uprightBitmap, bounds) ?: continue
+                        val faceBitmap = face.cropForEmbedding(uprightBitmap) ?: continue
 
                         when (mode) {
                             Mode.CAMERA, Mode.SCAN -> {
@@ -994,7 +984,7 @@ private fun processFrame(
                             Mode.REGISTER -> {
                                 val candidateBitmaps = mutableListOf<Bitmap>()
                                 for (f in detectedFaces) {
-                                    val cropped = cropBitmap(uprightBitmap, f.bounds) ?: continue
+                                    val cropped = f.cropForEmbedding(uprightBitmap) ?: continue
                                     candidateBitmaps.add(cropped)
                                     faceList.add(
                                         FaceData(
@@ -1093,20 +1083,6 @@ private fun rotateBitmapForAnalysis(bitmap: Bitmap, degrees: Int): Bitmap {
     return Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
 }
 
-private fun cropBitmap(bitmap: Bitmap, bounds: android.graphics.Rect): Bitmap? {
-    return try {
-        val left = bounds.left.coerceIn(0, bitmap.width - 1)
-        val top = bounds.top.coerceIn(0, bitmap.height - 1)
-        val width = (bounds.right - bounds.left).coerceIn(1, bitmap.width - left)
-        val height = (bounds.bottom - bounds.top).coerceIn(1, bitmap.height - top)
-
-        Bitmap.createBitmap(bitmap, left, top, width, height)
-    } catch (e: Exception) {
-        Log.e(TAG, "Failed to crop bitmap", e)
-        null
-    }
-}
-
 private fun bindCameraUseCases(
     cameraProvider: ProcessCameraProvider,
     lifecycleOwner: LifecycleOwner,
@@ -1192,7 +1168,7 @@ private fun processPickedImage(
 
     viewModel.launchFrameWork {
         val detectedFaces = try {
-            faceDetector.detect(bitmap)
+            faceDetector.detectMultiScale(bitmap)
         } catch (e: Exception) {
             Log.e(TAG, "Face detection on picked image failed", e)
             emptyList()
@@ -1203,7 +1179,7 @@ private fun processPickedImage(
             if (mode == Mode.REGISTER) {
                 val candidateBitmaps = mutableListOf<Bitmap>()
                 for (face in detectedFaces) {
-                    val cropped = cropBitmap(bitmap, face.bounds) ?: continue
+                    val cropped = face.cropForEmbedding(bitmap) ?: continue
                     candidateBitmaps.add(cropped)
                     faceList.add(
                         FaceData(
@@ -1222,7 +1198,7 @@ private fun processPickedImage(
                 for (face in detectedFaces) {
                     try {
                         val bounds = face.bounds
-                        val faceBitmap = cropBitmap(bitmap, bounds) ?: continue
+                        val faceBitmap = face.cropForEmbedding(bitmap) ?: continue
                         val embedding = faceRecognitionHelper.getEmbedding(faceBitmap)
                         val result = faceRecognitionHelper.recognize(embedding)
                         val faceId = FaceData.stableId(bounds)

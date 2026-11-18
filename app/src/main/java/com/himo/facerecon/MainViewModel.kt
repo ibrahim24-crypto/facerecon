@@ -778,7 +778,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     private suspend fun detectFacesInBitmap(bitmap: Bitmap, faceDetector: BlazeFaceDetector): List<FaceData> {
         val detectedFaces = try {
-            faceDetector.detect(bitmap)
+            faceDetector.detectMultiScale(bitmap)
         } catch (e: Exception) {
             Log.e(TAG, "Face detection failed on bitmap", e)
             emptyList()
@@ -787,11 +787,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         for (face in detectedFaces) {
             try {
                 val bounds = face.bounds
-                val left = bounds.left.coerceIn(0, bitmap.width - 1)
-                val top = bounds.top.coerceIn(0, bitmap.height - 1)
-                val width = (bounds.right - bounds.left).coerceIn(1, bitmap.width - left)
-                val height = (bounds.bottom - bounds.top).coerceIn(1, bitmap.height - top)
-                val faceBitmap = Bitmap.createBitmap(bitmap, left, top, width, height)
+                val faceBitmap = face.cropForEmbedding(bitmap) ?: continue
 
                 val embedding = faceRecognitionHelper.getEmbedding(faceBitmap)
                 val result = faceRecognitionHelper.recognize(embedding)
@@ -1107,19 +1103,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             val faces = withContext(Dispatchers.Default) {
                 val crops = mutableListOf<Bitmap>()
                 val detectedFaces = try {
-                    faceDetector.detect(bitmap)
+                    faceDetector.detectMultiScale(bitmap)
                 } catch (e: Exception) {
                     Log.e(TAG, "Face detection failed for class image", e)
                     emptyList()
                 }
                 for (face in detectedFaces) {
-                    val bounds = face.bounds
-                    val left = bounds.left.coerceIn(0, bitmap.width - 1)
-                    val top = bounds.top.coerceIn(0, bitmap.height - 1)
-                    val w = (bounds.right - bounds.left).coerceIn(1, bitmap.width - left)
-                    val h = (bounds.bottom - bounds.top).coerceIn(1, bitmap.height - top)
                     try {
-                        crops.add(Bitmap.createBitmap(bitmap, left, top, w, h))
+                        face.cropForEmbedding(bitmap)?.let { crops.add(it) }
                     } catch (_: Exception) {}
                 }
                 crops

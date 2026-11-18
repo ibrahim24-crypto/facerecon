@@ -23,6 +23,7 @@
 - **CSV Export**: Save attendance records to any folder (Downloads, Drive, etc.)
 - **Student Management**: Rename or remove students from classes
 - **Settings**: Dark theme, delete data, clear history
+- **Material 3 UI**: Standard Material You components with dynamic color (where available), light/dark themes, and predictable touch feedback
 
 ### 🚀 Getting Started
 
@@ -340,13 +341,26 @@ R: Oui! L'app fonctionne complètement hors ligne. Exportez les données quand v
 ### Technologies / Technologies utilisées / التقنيات المستخدمة
 - Google ML Kit Face Detection
 - TensorFlow Lite FaceNet
-- Jetpack Compose
+- Jetpack Compose + Material 3 (Material You)
 - DataStore Preferences
 - CameraX
 
 ### Version / Version / الإصدار
-- Current: 1.0
+- Current: 1.1.0
 - Build Target: Android 15 (API 35)
+- Minimum: Android 8.1 (API 27)
+
+### Build a signed release
+
+The release signing key is expected at the repository root as `key` and is intentionally ignored by Git. Configure these values locally through Gradle properties or environment variables before building; do not commit signing credentials:
+
+| Gradle property | Environment variable |
+|-----------------|----------------------|
+| `facereconReleaseStorePassword` | `FACERECON_RELEASE_STORE_PASSWORD` |
+| `facereconReleaseKeyAlias` | `FACERECON_RELEASE_KEY_ALIAS` |
+| `facereconReleaseKeyPassword` | `FACERECON_RELEASE_KEY_PASSWORD` |
+
+Build the APK with `./gradlew --no-daemon :app:assembleRelease`. The output is `app/build/outputs/apk/release/app-release.apk`.
 
 ---
 
@@ -357,4 +371,4 @@ Pour les problèmes ou demandes de fonctionnalités, veuillez contacter l'équip
 
 ---
 
-*Last Updated: July 2026 / Dernière mise à jour: Juillet 2026 / آخر تحديث: يوليو 2026*
+*Last Updated: October 2026 / Dernière mise à jour: Octobre 2026 / آخر تحديث: أكتوبر 2026*

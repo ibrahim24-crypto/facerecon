@@ -22,5 +22,5 @@
     <string name="about_tech_face">Detection : ML Kit</string>
     <string name="about_tech_recognition">Reconnaissance : FaceNet TFLite</string>
     <string name="about_tech_camera">Camera : CameraX</string>
-    <string name="about_tech_ui">Interface : Jetpack Compose</string>
+    <string name="about_tech_ui">Interface : Jetpack Compose Material 3</string>
 </resources>
