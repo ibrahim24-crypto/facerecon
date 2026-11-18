@@ -37,4 +37,11 @@
     <string name="known_faces_in_photo">Visages connus dans cette photo</string>
     <string name="add">Ajouter</string>
     <string name="skip">Passer</string>
+
+    <!-- Recognition settings -->
+    <string name="settings_recognition_title">Reconnaissance</string>
+    <string name="recognition_threshold_label">Seuil de correspondance : %1$.2f</string>
+    <string name="recognition_threshold_hint">Plus bas = plus strict (moins de faux positifs). Plus haut = plus permissif.</string>
+    <string name="min_face_size_label">Taille minimale du visage : 15 %</string>
+    <string name="min_face_size_hint">Les visages plus petits sont ignorés.</string>
 </resources>

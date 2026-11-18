@@ -65,6 +65,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _currentLanguage = MutableStateFlow("system")
     val currentLanguage: StateFlow<String> = _currentLanguage.asStateFlow()
 
+    private val _recognitionThreshold = MutableStateFlow(FaceRecognitionHelper.DEFAULT_THRESHOLD)
+    val recognitionThreshold: StateFlow<Float> = _recognitionThreshold.asStateFlow()
+
     private val _currentScreen = MutableStateFlow(AppScreen.MAIN)
     val currentScreen: StateFlow<AppScreen> = _currentScreen.asStateFlow()
 
@@ -192,6 +195,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             val lang = themePreferences.readLanguage()
             _currentLanguage.value = lang ?: "system"
+
+            val threshold = themePreferences.readRecognitionThreshold()
+            _recognitionThreshold.value = threshold ?: FaceRecognitionHelper.DEFAULT_THRESHOLD
         }
     }
 
@@ -206,8 +212,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             faceId = faceId,
             rawName = result.name,
             distance = result.bestDistance,
-            threshold = FaceRecognitionHelper.DEFAULT_THRESHOLD
+            threshold = _recognitionThreshold.value
         )
+    }
+
+    fun recognizeFace(embedding: FloatArray): RecognitionResult {
+        return faceRecognitionHelper.recognize(embedding, _recognitionThreshold.value)
+    }
+
+    fun setRecognitionThreshold(value: Float) {
+        val clamped = value.coerceIn(
+            ThemePreferences.MIN_RECOGNITION_THRESHOLD,
+            ThemePreferences.MAX_RECOGNITION_THRESHOLD
+        )
+        if (_recognitionThreshold.value == clamped) return
+        _recognitionThreshold.value = clamped
+        viewModelScope.launch {
+            themePreferences.saveRecognitionThreshold(clamped)
+        }
     }
 
     fun pruneFaceTracks(activeIds: Set<String>) {
@@ -795,7 +817,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val faceBitmap = face.cropForEmbedding(bitmap) ?: continue
 
                 val embedding = faceRecognitionHelper.getEmbedding(faceBitmap)
-                val result = faceRecognitionHelper.recognize(embedding)
+                val result = recognizeFace(embedding)
                 val faceId = FaceData.stableId(bounds)
                 val stableName = stabilizeRecognition(faceId, result)
 
@@ -1152,7 +1174,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                     try {
                         val embedding = faceRecognitionHelper.getEmbedding(crop)
-                        val result = faceRecognitionHelper.recognize(embedding)
+                        val result = recognizeFace(embedding)
                         if (result.name != "Unknown") {
                             known.add(KnownImageFace(result.name, crop))
                             continue

@@ -23,8 +23,60 @@ import kotlin.math.sqrt
 data class RecognitionResult(
     val name: String,
     val bestDistance: Float,
-    val bestCandidateName: String
+    val bestCandidateName: String,
+    val ambiguous: Boolean = false
 )
+
+internal fun l2Normalize(vector: FloatArray): FloatArray {
+    var sum = 0.0
+    for (value in vector) sum += value.toDouble() * value.toDouble()
+    val norm = sqrt(sum).toFloat()
+    if (norm == 0f || norm.isNaN() || norm.isInfinite()) return FloatArray(vector.size)
+    return FloatArray(vector.size) { vector[it] / norm }
+}
+
+internal fun l2Distance(a: FloatArray, b: FloatArray): Float {
+    val size = minOf(a.size, b.size)
+    var sum = 0.0
+    for (i in 0 until size) {
+        val diff = a[i] - b[i]
+        sum += diff.toDouble() * diff.toDouble()
+    }
+    return sqrt(sum).toFloat()
+}
+
+/**
+ * Pure matching rule so it can be unit-tested without loading TFLite.
+ * Distances are Euclidean on unit-length vectors (equivalent to cosine ranking).
+ */
+internal fun recognizeEmbedding(
+    embedding: FloatArray,
+    knownFaces: Map<String, List<FloatArray>>,
+    threshold: Float,
+    minMargin: Float = FaceRecognitionHelper.AMBIGUITY_MARGIN,
+    samplesPerPerson: Int = 3
+): RecognitionResult {
+    val normalized = l2Normalize(embedding)
+    val scores = knownFaces.mapNotNull { (name, samples) ->
+        val usable = samples.filter { it.isNotEmpty() }
+        if (usable.isEmpty()) return@mapNotNull null
+        val distances = usable.map { l2Distance(normalized, l2Normalize(it)) }.sorted()
+        val k = minOf(samplesPerPerson, distances.size)
+        name to (distances.take(k).sum() / k)
+    }.sortedBy { it.second }
+
+    if (scores.isEmpty()) {
+        return RecognitionResult("Unknown", Float.MAX_VALUE, "Unknown")
+    }
+
+    val (bestName, bestDistance) = scores.first()
+    val secondDistance = scores.getOrNull(1)?.second
+    val ambiguous = secondDistance != null &&
+        bestDistance < threshold &&
+        (secondDistance - bestDistance) < minMargin
+    val recognized = if (!ambiguous && bestDistance < threshold) bestName else "Unknown"
+    return RecognitionResult(recognized, bestDistance, bestName, ambiguous)
+}
 
 class FaceRecognitionHelper(
     context: Context,
@@ -39,6 +91,9 @@ class FaceRecognitionHelper(
     private val storage = FaceStorage(context)
     private val knownFaces = mutableMapOf<String, MutableList<StoredFaceSample>>()
 
+    // facenet.tflite is inception_resnet_v1. The model has no embedded metadata,
+    // but its training preprocess is per-image standardization (subtract mean,
+    // divide by std) after a bilinear resize to 160x160 — this matches StandardizeOp.
     private val imageProcessor = ImageProcessor.Builder()
         .add(ResizeOp(INPUT_SIZE, INPUT_SIZE, ResizeOp.ResizeMethod.BILINEAR))
         .add(StandardizeOp())
@@ -95,7 +150,9 @@ class FaceRecognitionHelper(
     private fun loadFromDisk() {
         knownFaces.clear()
         storage.loadAll().forEach { sample ->
-            knownFaces.getOrPut(sample.name) { mutableListOf() }.add(sample)
+            // Embeddings written by older versions were not normalized.
+            val normalizedSample = sample.copy(embedding = l2Normalize(sample.embedding))
+            knownFaces.getOrPut(normalizedSample.name) { mutableListOf() }.add(normalizedSample)
         }
         Log.d(TAG, "Loaded ${knownFaces.values.sumOf { it.size }} samples for ${knownFaces.size} people")
     }
@@ -105,37 +162,23 @@ class FaceRecognitionHelper(
             val input = imageProcessor.process(TensorImage.fromBitmap(faceBitmap)).buffer
             val output = Array(1) { FloatArray(embeddingDim) }
             interpreter.run(input, output)
-            output[0]
+            l2Normalize(output[0])
         }.get()
     }
 
     fun recognize(embedding: FloatArray, threshold: Float = DEFAULT_THRESHOLD): RecognitionResult {
-        if (knownFaces.isEmpty()) {
-            return RecognitionResult("Unknown", Float.MAX_VALUE, "Unknown")
-        }
-
-        var bestName = "Unknown"
-        var bestAvgDist = Float.MAX_VALUE
-
-        for ((name, samples) in knownFaces) {
-            if (samples.isEmpty()) continue
-            var sum = 0f
-            for (sample in samples) {
-                sum += euclideanDistance(embedding, sample.embedding)
-            }
-            val avg = sum / samples.size
-            if (avg < bestAvgDist) {
-                bestAvgDist = avg
-                bestName = name
-            }
-        }
-
-        val recognized = if (bestAvgDist < threshold) bestName else "Unknown"
-        return RecognitionResult(recognized, bestAvgDist, bestName)
+        val samplesByName = knownFaces.mapValues { (_, samples) -> samples.map { it.embedding } }
+        return recognizeEmbedding(
+            embedding = embedding,
+            knownFaces = samplesByName,
+            threshold = threshold,
+            minMargin = AMBIGUITY_MARGIN
+        )
     }
 
     fun addFaceWithBitmap(name: String, bitmap: Bitmap, embedding: FloatArray) {
-        val sample = storage.saveSample(name, bitmap, embedding.copyOf())
+        val normalized = l2Normalize(embedding)
+        val sample = storage.saveSample(name, bitmap, normalized)
         knownFaces.getOrPut(name) { mutableListOf() }.add(sample)
     }
 
@@ -174,15 +217,6 @@ class FaceRecognitionHelper(
     fun getAllKnownNames(): Set<String> = knownFaces.keys.toSet()
     fun loadThumbnail(path: String): Bitmap? = storage.loadThumbnail(path)
 
-    private fun euclideanDistance(a: FloatArray, b: FloatArray): Float {
-        var sum = 0.0
-        for (i in a.indices) {
-            val d = a[i] - b[i]
-            sum += d * d
-        }
-        return sqrt(sum).toFloat()
-    }
-
     private class StandardizeOp : TensorOperator {
         override fun apply(input: TensorBuffer?): TensorBuffer {
             val pixels = input!!.floatArray
@@ -216,6 +250,8 @@ class FaceRecognitionHelper(
     companion object {
         private const val TAG = "FaceRecognitionHelper"
         private const val INPUT_SIZE = 160
-        const val DEFAULT_THRESHOLD = 10.0f
+        // Euclidean distance between unit-length FaceNet embeddings.
+        const val DEFAULT_THRESHOLD = 1.0f
+        const val AMBIGUITY_MARGIN = 0.1f
     }
 }

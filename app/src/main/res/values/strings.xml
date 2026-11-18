@@ -80,4 +80,11 @@
     <string name="known_faces_in_photo">Known faces in this photo</string>
     <string name="add">Add</string>
     <string name="skip">Skip</string>
+
+    <!-- Recognition settings -->
+    <string name="settings_recognition_title">Recognition</string>
+    <string name="recognition_threshold_label">Match threshold: %1$.2f</string>
+    <string name="recognition_threshold_hint">Lower = stricter (fewer false positives). Higher = more permissive.</string>
+    <string name="min_face_size_label">Min face size: 15%</string>
+    <string name="min_face_size_hint">Faces smaller than this are ignored.</string>
 </resources>

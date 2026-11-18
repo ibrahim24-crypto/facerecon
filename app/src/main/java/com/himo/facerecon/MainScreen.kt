@@ -934,7 +934,7 @@ private fun processFrame(
                         when (mode) {
                             Mode.CAMERA, Mode.SCAN -> {
                                 val embedding = faceRecognitionHelper.getEmbedding(faceBitmap)
-                                val result = faceRecognitionHelper.recognize(embedding)
+                                val result = viewModel.recognizeFace(embedding)
                                 val faceId = FaceData.stableId(bounds)
                                 val stableName = viewModel.stabilizeRecognition(faceId, result)
 
@@ -1006,7 +1006,7 @@ private fun processFrame(
                             }
                             Mode.ATTENDANCE -> {
                                 val embedding = faceRecognitionHelper.getEmbedding(faceBitmap)
-                                val result = faceRecognitionHelper.recognize(embedding)
+                                val result = viewModel.recognizeFace(embedding)
                                 val faceId = FaceData.stableId(bounds)
                                 val stableName = viewModel.stabilizeRecognition(faceId, result)
 
@@ -1206,7 +1206,7 @@ private fun processPickedImage(
                         val bounds = face.bounds
                         val faceBitmap = face.cropForEmbedding(bitmap) ?: continue
                         val embedding = faceRecognitionHelper.getEmbedding(faceBitmap)
-                        val result = faceRecognitionHelper.recognize(embedding)
+                        val result = viewModel.recognizeFace(embedding)
                         val faceId = FaceData.stableId(bounds)
                         val stableName = viewModel.stabilizeRecognition(faceId, result)
 

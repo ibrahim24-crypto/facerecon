@@ -5,6 +5,7 @@ import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
@@ -22,6 +23,7 @@ class ThemePreferences(private val context: Context) {
     private val autoCaptureEnabledKey = booleanPreferencesKey("pref_auto_capture_enabled")
     private val autoCaptureIntervalKey = androidx.datastore.preferences.core.intPreferencesKey("pref_auto_capture_interval_s")
     private val languageKey = androidx.datastore.preferences.core.stringPreferencesKey("pref_language")
+    private val recognitionThresholdKey = floatPreferencesKey("pref_recognition_threshold")
 
     suspend fun readDarkTheme(): Boolean? {
         return context.themeDataStore.data
@@ -93,5 +95,28 @@ class ThemePreferences(private val context: Context) {
 
     suspend fun saveLanguage(lang: String) {
         context.themeDataStore.edit { prefs -> prefs[languageKey] = lang }
+    }
+
+    suspend fun readRecognitionThreshold(): Float? {
+        val stored = context.themeDataStore.data
+            .map { prefs -> prefs[recognitionThresholdKey] }
+            .first() ?: return null
+        // Older builds stored a Euclidean threshold near 10.0 for unnormalized
+        // embeddings. That value is meaningless on unit-length vectors.
+        return if (stored in MIN_RECOGNITION_THRESHOLD..MAX_RECOGNITION_THRESHOLD) stored else null
+    }
+
+    suspend fun saveRecognitionThreshold(value: Float) {
+        context.themeDataStore.edit { prefs ->
+            prefs[recognitionThresholdKey] = value.coerceIn(
+                MIN_RECOGNITION_THRESHOLD,
+                MAX_RECOGNITION_THRESHOLD
+            )
+        }
+    }
+
+    companion object {
+        const val MIN_RECOGNITION_THRESHOLD = 0.4f
+        const val MAX_RECOGNITION_THRESHOLD = 2.0f
     }
 }

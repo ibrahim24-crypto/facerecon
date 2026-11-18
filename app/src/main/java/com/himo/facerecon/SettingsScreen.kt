@@ -46,6 +46,7 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Switch
 import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
@@ -75,6 +76,7 @@ fun SettingsScreen(
     val context = LocalContext.current
     val darkTheme by viewModel.darkTheme.collectAsStateWithLifecycle()
     val currentLanguage by viewModel.currentLanguage.collectAsStateWithLifecycle()
+    val recognitionThreshold by viewModel.recognitionThreshold.collectAsStateWithLifecycle()
     val classes by viewModel.classes.collectAsStateWithLifecycle()
     var showClearHistoryConfirm by remember { mutableStateOf(false) }
     var showClearAllConfirm by remember { mutableStateOf(false) }
@@ -232,7 +234,10 @@ fun SettingsScreen(
             }
 
             // --- Recognition ---
-            SectionHeader(icon = Icons.Default.Security, title = "Recognition")
+            SectionHeader(
+                icon = Icons.Default.Security,
+                title = stringResource(R.string.settings_recognition_title)
+            )
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(16.dp),
@@ -240,20 +245,34 @@ fun SettingsScreen(
                 Column(modifier = Modifier.fillMaxWidth().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Memory, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(18.dp))
-                        Text("Threshold: ${FaceRecognitionHelper.DEFAULT_THRESHOLD}", modifier = Modifier.padding(start = 10.dp), style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            stringResource(R.string.recognition_threshold_label, recognitionThreshold),
+                            modifier = Modifier.padding(start = 10.dp),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
                     }
+                    Slider(
+                        value = recognitionThreshold,
+                        onValueChange = { viewModel.setRecognitionThreshold(it) },
+                        valueRange = ThemePreferences.MIN_RECOGNITION_THRESHOLD..ThemePreferences.MAX_RECOGNITION_THRESHOLD,
+                        steps = 15
+                    )
                     Text(
-                        "Lower = stricter (fewer false positives). Higher = more permissive.",
+                        stringResource(R.string.recognition_threshold_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 28.dp)
                     )
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(Icons.Default.Security, contentDescription = null, tint = MaterialTheme.colorScheme.secondary, modifier = Modifier.size(18.dp))
-                        Text("Min face size: 15%", modifier = Modifier.padding(start = 10.dp), style = MaterialTheme.typography.bodyLarge)
+                        Text(
+                            stringResource(R.string.min_face_size_label),
+                            modifier = Modifier.padding(start = 10.dp),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
                     }
                     Text(
-                        "Faces smaller than this are ignored.",
+                        stringResource(R.string.min_face_size_hint),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(start = 28.dp)
