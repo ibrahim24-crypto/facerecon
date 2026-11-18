@@ -71,4 +71,9 @@
     <string name="scan_roster_hint">Tap a red face to enroll, an orange face to add a registered student.</string>
     <string name="known_face_added">Added %1$s</string>
     <string name="face_in_roster_check">✓</string>
+    <string name="add_registered_student">Add registered student</string>
+    <string name="select_registered_students">Select registered students</string>
+    <string name="search_registered_students">Search registered students...</string>
+    <string name="no_registered_students">No registered students available</string>
+    <string name="add_selected">Add selected</string>
 </resources>

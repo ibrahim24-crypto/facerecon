@@ -40,6 +40,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -64,6 +65,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.SimpleDateFormat
@@ -79,6 +81,7 @@ fun ClassListScreen(
 ) {
     val context = LocalContext.current
     val classes by viewModel.classes.collectAsStateWithLifecycle()
+    val knownNames by viewModel.knownNames.collectAsStateWithLifecycle()
     val pendingScanCandidates by viewModel.pendingScanCandidates.collectAsStateWithLifecycle()
     val pendingClassName by viewModel.pendingClassName.collectAsStateWithLifecycle()
     val pendingClassRoster by viewModel.pendingClassRoster.collectAsStateWithLifecycle()
@@ -101,6 +104,9 @@ fun ClassListScreen(
     var importRosterText by remember { mutableStateOf("") }
     var postImportInfo by remember { mutableStateOf<Triple<String, List<String>, String?>?>(null) }
     // ^ Triple<className, parsedNames, existingClassId?> for post-import scan dialog
+    var showAddRegisteredDialog by remember { mutableStateOf(false) }
+    var registeredSearch by remember { mutableStateOf("") }
+    var selectedRegistered by remember { mutableStateOf<Set<String>>(emptySet()) }
 
     val imagePickerLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.GetContent()
@@ -255,10 +261,17 @@ fun ClassListScreen(
             },
             confirmButton = {
                 if (editing != null) {
-                    TextButton(onClick = {
-                        viewModel.saveClass(editing.copy(name = classNameInput.trim()))
-                        editingClass = null
-                    }) { Text("Save") }
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = {
+                            registeredSearch = ""
+                            selectedRegistered = emptySet()
+                            showAddRegisteredDialog = true
+                        }) { Text(stringResource(R.string.add_registered_student)) }
+                        TextButton(onClick = {
+                            viewModel.saveClass(editing.copy(name = classNameInput.trim()))
+                            editingClass = null
+                        }) { Text(stringResource(R.string.save)) }
+                    }
                 } else {
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         TextButton(
@@ -283,6 +296,82 @@ fun ClassListScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showNameDialog = false; editingClass = null }) { Text("Cancel") }
+            }
+        )
+    }
+
+    // Add already-registered students without using the camera
+    val editingForSelection = editingClass
+    if (showAddRegisteredDialog && editingForSelection != null) {
+        val candidates = remember(knownNames, editingForSelection.studentNames, registeredSearch) {
+            knownNames.filter { name ->
+                name !in editingForSelection.studentNames &&
+                    name.contains(registeredSearch, ignoreCase = true)
+            }
+        }
+        AlertDialog(
+            onDismissRequest = { showAddRegisteredDialog = false },
+            title = { Text(stringResource(R.string.select_registered_students)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = registeredSearch,
+                        onValueChange = { registeredSearch = it },
+                        placeholder = { Text(stringResource(R.string.search_registered_students)) },
+                        modifier = Modifier.fillMaxWidth(),
+                        singleLine = true
+                    )
+                    if (candidates.isEmpty()) {
+                        Text(stringResource(R.string.no_registered_students))
+                    } else {
+                        LazyColumn(modifier = Modifier.height(200.dp)) {
+                            items(candidates, key = { it }) { name ->
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .clickable {
+                                            selectedRegistered = if (name in selectedRegistered) {
+                                                selectedRegistered - name
+                                            } else {
+                                                selectedRegistered + name
+                                            }
+                                        },
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Checkbox(
+                                        checked = name in selectedRegistered,
+                                        onCheckedChange = { checked ->
+                                            selectedRegistered = if (checked) {
+                                                selectedRegistered + name
+                                            } else {
+                                                selectedRegistered - name
+                                            }
+                                        }
+                                    )
+                                    Text(name, modifier = Modifier.weight(1f))
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        editingClass = editingForSelection.copy(
+                            studentNames = (editingForSelection.studentNames + selectedRegistered)
+                                .distinct()
+                                .sorted()
+                        )
+                        showAddRegisteredDialog = false
+                    },
+                    enabled = selectedRegistered.isNotEmpty()
+                ) { Text(stringResource(R.string.add_selected)) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showAddRegisteredDialog = false }) {
+                    Text(stringResource(R.string.cancel))
+                }
             }
         )
     }

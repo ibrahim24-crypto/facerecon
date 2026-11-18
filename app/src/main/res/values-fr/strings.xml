@@ -28,4 +28,9 @@
     <string name="scan_roster_hint">Touchez un visage rouge pour l\'inscrire, un visage orange pour ajouter un étudiant déjà enregistré.</string>
     <string name="known_face_added">%1$s ajouté</string>
     <string name="face_in_roster_check">✓</string>
+    <string name="add_registered_student">Ajouter un étudiant enregistré</string>
+    <string name="select_registered_students">Sélectionner des étudiants enregistrés</string>
+    <string name="search_registered_students">Rechercher des étudiants enregistrés...</string>
+    <string name="no_registered_students">Aucun étudiant enregistré disponible</string>
+    <string name="add_selected">Ajouter la sélection</string>
 </resources>
