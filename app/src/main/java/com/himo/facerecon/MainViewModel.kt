@@ -130,6 +130,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val _attendanceTimestamps = MutableStateFlow<Map<String, Long>>(emptyMap())
     val attendanceTimestamps: StateFlow<Map<String, Long>> = _attendanceTimestamps.asStateFlow()
 
+    private val _attendanceUnsure = MutableStateFlow<Set<String>>(emptySet())
+    val attendanceUnsure: StateFlow<Set<String>> = _attendanceUnsure.asStateFlow()
+
     private val _hapticTrigger = MutableStateFlow(0)
     val hapticTrigger: StateFlow<Int> = _hapticTrigger.asStateFlow()
 
@@ -207,12 +210,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun stabilizeRecognition(faceId: String, result: RecognitionResult): String {
+    fun stabilizeRecognition(faceId: String, result: RecognitionResult): StabilizedRecognition {
         return faceStabilizer.stabilize(
             faceId = faceId,
             rawName = result.name,
             distance = result.bestDistance,
-            threshold = _recognitionThreshold.value
+            threshold = _recognitionThreshold.value,
+            ambiguous = result.ambiguous,
+            candidateName = result.bestCandidateName
         )
     }
 
@@ -470,9 +475,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (session != null && name !in session.presentNames) {
                 val now = System.currentTimeMillis()
                 _attendancePresent.value = _attendancePresent.value + name
+                _attendanceUnsure.value = _attendanceUnsure.value - name
                 _attendanceTimestamps.value = _attendanceTimestamps.value + (name to now)
                 val updated = session.copy(
                     presentNames = session.presentNames + name,
+                    unsureNames = session.unsureNames - name,
                     timestamps = session.timestamps + (name to now)
                 )
                 _attendanceSession.value = updated
@@ -605,9 +612,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             if (session != null && name !in session.presentNames && name !in session.absentNames) {
                 val now = System.currentTimeMillis()
                 _attendancePresent.value = _attendancePresent.value + name
+                _attendanceUnsure.value = _attendanceUnsure.value - name
                 _attendanceTimestamps.value = _attendanceTimestamps.value + (name to now)
                 val updated = session.copy(
                     presentNames = session.presentNames + name,
+                    unsureNames = session.unsureNames - name,
                     timestamps = session.timestamps + (name to now)
                 )
                 _attendanceSession.value = updated
@@ -819,7 +828,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val embedding = faceRecognitionHelper.getEmbedding(faceBitmap)
                 val result = recognizeFace(embedding)
                 val faceId = FaceData.stableId(bounds)
-                val stableName = stabilizeRecognition(faceId, result)
+                val stableName = stabilizeRecognition(faceId, result).name
 
                 if (stableName == "Unknown") {
                     faceList.add(
@@ -1008,6 +1017,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun startAttendanceSession(classGroup: ClassGroup) {
         _selectedClass.value = classGroup
         _attendancePresent.value = emptySet()
+        _attendanceUnsure.value = emptySet()
         _attendanceTimestamps.value = emptyMap()
         _currentMode.value = Mode.ATTENDANCE
         pushScreen(AppScreen.ATTENDANCE_SESSION)
@@ -1018,22 +1028,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun markAttendanceRecognized(name: String) {
         val roster = _selectedClass.value?.studentNames ?: return
         if (name !in roster) return
-        if (name in _attendancePresent.value) return
-        _attendancePresent.value = _attendancePresent.value + name
+        if (name !in _attendancePresent.value) {
+            _attendancePresent.value = _attendancePresent.value + name
+            _attendanceTimestamps.value = _attendanceTimestamps.value + (name to System.currentTimeMillis())
+            _hapticTrigger.value = _hapticTrigger.value + 1
+        }
+        if (name in _attendanceUnsure.value) {
+            _attendanceUnsure.value = _attendanceUnsure.value - name
+        }
+    }
+
+    fun markAttendanceUnsure(name: String) {
+        val roster = _selectedClass.value?.studentNames ?: return
+        if (name !in roster) return
+        if (name in _attendancePresent.value || name in _attendanceUnsure.value) return
+        _attendanceUnsure.value = _attendanceUnsure.value + name
         _attendanceTimestamps.value = _attendanceTimestamps.value + (name to System.currentTimeMillis())
-        _hapticTrigger.value = _hapticTrigger.value + 1
     }
 
     fun finalizeAttendanceSession() {
         val classGroup = _selectedClass.value ?: return
         val present = _attendancePresent.value
-        val absent = classGroup.studentNames.toSet() - present
+        val unsure = _attendanceUnsure.value - present
+        _attendanceUnsure.value = unsure
+        val absent = classGroup.studentNames.toSet() - present - unsure
         val session = AttendanceSession(
             classId = classGroup.id,
             className = classGroup.name,
             dateMs = System.currentTimeMillis(),
             presentNames = present,
             absentNames = absent,
+            unsureNames = unsure,
             timestamps = _attendanceTimestamps.value
         )
         attendanceStorage.save(session)
@@ -1043,25 +1068,28 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun toggleAttendanceStatus(name: String) {
         val session = _attendanceSession.value ?: return
-        val now = System.currentTimeMillis()
-        val updatedTimestamps = session.timestamps + (name to now)
-        if (name in session.presentNames) {
-            val updated = session.copy(
+        val updatedTimestamps = session.timestamps + (name to System.currentTimeMillis())
+        val updated = when {
+            name in session.presentNames -> session.copy(
                 presentNames = session.presentNames - name,
                 absentNames = session.absentNames + name,
-                timestamps = updatedTimestamps
+                unsureNames = session.unsureNames - name
             )
-            _attendanceSession.value = updated
-            attendanceStorage.save(updated)
-        } else {
-            val updated = session.copy(
-                presentNames = session.presentNames + name,
+            name in session.absentNames -> session.copy(
                 absentNames = session.absentNames - name,
-                timestamps = updatedTimestamps
+                unsureNames = session.unsureNames + name
             )
-            _attendanceSession.value = updated
-            attendanceStorage.save(updated)
-        }
+            else -> session.copy(
+                unsureNames = session.unsureNames - name,
+                presentNames = session.presentNames + name
+            )
+        }.copy(timestamps = updatedTimestamps)
+
+        _attendanceSession.value = updated
+        _attendancePresent.value = updated.presentNames
+        _attendanceUnsure.value = updated.unsureNames
+        _attendanceTimestamps.value = updated.timestamps
+        attendanceStorage.save(updated)
     }
 
     fun loadClassHistory(classId: String) {
@@ -1078,6 +1106,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun exitAttendance() {
         _selectedClass.value = null
         _attendancePresent.value = emptySet()
+        _attendanceUnsure.value = emptySet()
         _attendanceTimestamps.value = emptyMap()
         _attendanceSession.value = null
         _currentMode.value = Mode.CAMERA

@@ -8,7 +8,7 @@ import java.util.Locale
 
 object AttendanceExporter {
 
-    enum class Scope { PRESENT_ONLY, ABSENT_ONLY, BOTH }
+    enum class Scope { PRESENT_ONLY, ABSENT_ONLY, UNSURE_ONLY, BOTH }
 
     fun buildCsv(session: AttendanceSession, scope: Scope): String {
         val sb = StringBuilder()
@@ -17,17 +17,24 @@ object AttendanceExporter {
         val timeFormat = SimpleDateFormat("HH:mm:ss", Locale.getDefault())
         val dateStr = dateFormat.format(Date(session.dateMs))
 
-        if (scope == Scope.PRESENT_ONLY || scope == Scope.BOTH) {
-            session.presentNames.sorted().forEach { name ->
+        fun appendRows(names: Iterable<String>, status: String) {
+            names.sorted().forEach { name ->
                 val time = session.timestamps[name]?.let { timeFormat.format(Date(it)) } ?: ""
-                sb.appendLine("$name,Present,${session.className},$dateStr,$time")
+                sb.appendLine(
+                    listOf(name, status, session.className, dateStr, time)
+                        .joinToString(",") { escapeCsv(it) }
+                )
             }
         }
+
+        if (scope == Scope.PRESENT_ONLY || scope == Scope.BOTH) {
+            appendRows(session.presentNames, "Present")
+        }
         if (scope == Scope.ABSENT_ONLY || scope == Scope.BOTH) {
-            session.absentNames.sorted().forEach { name ->
-                val time = session.timestamps[name]?.let { timeFormat.format(Date(it)) } ?: ""
-                sb.appendLine("$name,Absent,${session.className},$dateStr,$time")
-            }
+            appendRows(session.absentNames, "Absent")
+        }
+        if (scope == Scope.UNSURE_ONLY || scope == Scope.BOTH) {
+            appendRows(session.unsureNames, "UNSURE")
         }
         return sb.toString()
     }
@@ -37,6 +44,7 @@ object AttendanceExporter {
         val suffix = when (scope) {
             Scope.PRESENT_ONLY -> "present"
             Scope.ABSENT_ONLY -> "absent"
+            Scope.UNSURE_ONLY -> "unsure"
             Scope.BOTH -> "all"
         }
         return "attendance_${session.className}_${suffix}_${dateFormat.format(Date(session.dateMs))}.csv"
@@ -51,5 +59,11 @@ object AttendanceExporter {
         } catch (e: Exception) {
             false
         }
+    }
+
+    private fun escapeCsv(value: String): String {
+        val needsQuotes = value.any { it == ',' || it == '"' || it == '\n' || it == '\r' }
+        val escaped = value.replace("\"", "\"\"")
+        return if (needsQuotes) "\"$escaped\"" else escaped
     }
 }

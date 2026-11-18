@@ -10,7 +10,9 @@ data class FaceData(
     val confidence: Float = 0f,
     // ^ Recognition distance (euclidean). Lower = more confident. 0 = not computed.
     val enrollmentBitmap: Bitmap? = null,
-    val enrollmentEmbedding: FloatArray? = null
+    val enrollmentEmbedding: FloatArray? = null,
+    // Attendance recognition needs review instead of a definite Present mark.
+    val unsure: Boolean = false
 ) {
     companion object {
         fun stableId(bounds: Rect): String {

@@ -41,9 +41,11 @@ internal fun faceBoxStyle(
     isScanMode: Boolean,
     isUnknown: Boolean,
     name: String,
-    rosterNames: Set<String>
+    rosterNames: Set<String>,
+    isUnsure: Boolean = false
 ): FaceBoxStyle = when {
     isRegisterMode -> FaceBoxStyle(RegisterColor, drawFill = true)
+    isUnsure -> FaceBoxStyle(RegisterColor, drawFill = true)
     isScanMode && isUnknown -> FaceBoxStyle(UnknownColor, drawFill = true)
     isScanMode && name !in rosterNames -> FaceBoxStyle(RegisterColor, drawFill = true)
     isScanMode -> FaceBoxStyle(KnownColor, drawFill = false)
@@ -79,6 +81,7 @@ fun FaceOverlay(
 
     val labelBackground = Color.Black.copy(alpha = 0.55f)
     val addedCheckLabel = stringResource(R.string.face_in_roster_check)
+    val unsureLabel = stringResource(R.string.attendance_unsure)
     val cornerRadius = 12.dp
     val baseStroke = if (faces.size <= 2) 5f else if (faces.size <= 5) 3f else 2f
 
@@ -93,7 +96,7 @@ fun FaceOverlay(
     Canvas(
         modifier = modifier
             .fillMaxSize()
-            .pointerInput(faces, rosterNames, isScanMode, onKnownFaceTap) {
+            .pointerInput(faces, rosterNames, isScanMode, onKnownFaceTap, unsureLabel) {
                 awaitEachGesture {
                     val down = awaitFirstDown(requireUnconsumed = false)
                     val downPos = down.position
@@ -148,7 +151,8 @@ fun FaceOverlay(
                 isScanMode = isScanMode,
                 isUnknown = isUnknown,
                 name = face.name,
-                rosterNames = rosterNames
+                rosterNames = rosterNames,
+                isUnsure = face.unsure
             )
             val color = style.color
 
@@ -200,6 +204,20 @@ fun FaceOverlay(
                     drawLeft + 8f,
                     (drawTop - 8f).coerceAtLeast(checkPaint.textSize),
                     checkPaint
+                )
+            }
+
+            if (face.unsure) {
+                val unsurePaint = Paint().also { p ->
+                    p.color = RegisterColor.toArgb()
+                    p.textSize = 32f
+                    p.isAntiAlias = true
+                }
+                drawContext.canvas.nativeCanvas.drawText(
+                    unsureLabel,
+                    drawLeft + 8f,
+                    (drawTop - 8f).coerceAtLeast(unsurePaint.textSize),
+                    unsurePaint
                 )
             }
 

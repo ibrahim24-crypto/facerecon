@@ -27,6 +27,7 @@ class AttendanceStorage(context: Context) {
                             dateMs = obj.getLong("dateMs"),
                             presentNames = obj.getJSONArray("presentNames").toStringSet(),
                             absentNames = obj.getJSONArray("absentNames").toStringSet(),
+                            unsureNames = obj.optJSONArray("unsureNames")?.toStringSet() ?: emptySet(),
                             timestamps = obj.optJSONObject("timestamps")?.toStringMap() ?: emptyMap()
                         )
                     )
@@ -68,6 +69,7 @@ class AttendanceStorage(context: Context) {
                     put("dateMs", s.dateMs)
                     put("presentNames", JSONArray(s.presentNames.toList()))
                     put("absentNames", JSONArray(s.absentNames.toList()))
+                    put("unsureNames", JSONArray(s.unsureNames.toList()))
                     put("timestamps", JSONObject().apply {
                         s.timestamps.forEach { (name, time) -> put(name, time) }
                     })

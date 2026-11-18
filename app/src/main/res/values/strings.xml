@@ -87,4 +87,30 @@
     <string name="recognition_threshold_hint">Lower = stricter (fewer false positives). Higher = more permissive.</string>
     <string name="min_face_size_label">Min face size: 15%</string>
     <string name="min_face_size_hint">Faces smaller than this are ignored.</string>
+
+    <!-- Attendance review -->
+    <string name="attendance_review_title">Attendance Review</string>
+    <string name="attendance_session_subtitle">%1$s — %2$s</string>
+    <string name="attendance_present">Present</string>
+    <string name="attendance_absent">Absent</string>
+    <string name="attendance_unsure">UNSURE</string>
+    <string name="attendance_unsure_count">Unsure (%1$d)</string>
+    <string name="attendance_unknown_faces">Unknown Faces (%1$d) — tap to identify</string>
+    <string name="attendance_unknown_face">Unknown face</string>
+    <string name="attendance_toggle_hint">Tap a name to change Present / Absent / UNSURE</string>
+    <string name="attendance_search">Search students...</string>
+    <string name="attendance_present_count">Present (%1$d)</string>
+    <string name="attendance_absent_count">Absent (%1$d)</string>
+    <string name="attendance_export_present">Present</string>
+    <string name="attendance_export_absent">Absent</string>
+    <string name="attendance_export_unsure">Unsure</string>
+    <string name="attendance_export_all">All</string>
+    <string name="attendance_scan_late">Scan Late Student</string>
+    <string name="attendance_saved">Saved</string>
+    <string name="attendance_save_failed">Save failed</string>
+    <string name="student_name">Student name</string>
+    <string name="enroll_mark_present">Enroll &amp; Mark Present</string>
+    <string name="back">Back</string>
+    <string name="dismiss">Dismiss</string>
+    <string name="toggle">Toggle</string>
 </resources>

@@ -3,6 +3,7 @@ package com.himo.facerecon
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -20,9 +21,10 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.FileDownload
+import androidx.compose.material.icons.filled.HelpOutline
 import androidx.compose.material.icons.filled.PhotoCamera
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SwapHoriz
@@ -51,11 +53,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+
+private enum class ReviewStatus(@StringRes val labelRes: Int) {
+    PRESENT(R.string.attendance_present),
+    ABSENT(R.string.attendance_absent),
+    UNSURE(R.string.attendance_unsure)
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,7 +73,7 @@ fun AttendanceReviewScreen(
     viewModel: MainViewModel,
     modifier: Modifier = Modifier
 ) {
-    val context = androidx.compose.ui.platform.LocalContext.current
+    val context = LocalContext.current
     val session by viewModel.attendanceSession.collectAsStateWithLifecycle()
     val capturedFaces by viewModel.capturedFaces.collectAsStateWithLifecycle()
     var pendingScope by remember { mutableStateOf<AttendanceExporter.Scope?>(null) }
@@ -74,14 +84,15 @@ fun AttendanceReviewScreen(
         contract = ActivityResultContracts.CreateDocument("text/csv")
     ) { uri ->
         val scope = pendingScope
-        val s = session
-        if (uri != null && scope != null && s != null) {
-            val csv = AttendanceExporter.buildCsv(s, scope)
-            if (AttendanceExporter.writeToUri(context, uri, csv)) {
-                Toast.makeText(context, "Saved", Toast.LENGTH_SHORT).show()
+        val current = session
+        if (uri != null && scope != null && current != null) {
+            val csv = AttendanceExporter.buildCsv(current, scope)
+            val messageRes = if (AttendanceExporter.writeToUri(context, uri, csv)) {
+                R.string.attendance_saved
             } else {
-                Toast.makeText(context, "Save failed", Toast.LENGTH_SHORT).show()
+                R.string.attendance_save_failed
             }
+            Toast.makeText(context, context.getString(messageRes), Toast.LENGTH_SHORT).show()
         }
         pendingScope = null
     }
@@ -90,8 +101,11 @@ fun AttendanceReviewScreen(
     if (namingCapturedId != null) {
         val sample = capturedFaces.find { it.id == namingCapturedId }
         AlertDialog(
-            onDismissRequest = { namingCapturedId = null; namingCapturedInput = "" },
-            title = { Text("Who is this?") },
+            onDismissRequest = {
+                namingCapturedId = null
+                namingCapturedInput = ""
+            },
+            title = { Text(stringResource(R.string.who_is_this)) },
             text = {
                 Column(
                     horizontalAlignment = Alignment.CenterHorizontally,
@@ -100,7 +114,7 @@ fun AttendanceReviewScreen(
                     if (sample != null) {
                         Image(
                             bitmap = sample.bitmap.asImageBitmap(),
-                            contentDescription = null,
+                            contentDescription = stringResource(R.string.attendance_unknown_face),
                             modifier = Modifier.size(120.dp).clip(MaterialTheme.shapes.medium),
                             contentScale = ContentScale.Crop
                         )
@@ -108,7 +122,7 @@ fun AttendanceReviewScreen(
                     OutlinedTextField(
                         value = namingCapturedInput,
                         onValueChange = { namingCapturedInput = it },
-                        label = { Text("Student name") },
+                        label = { Text(stringResource(R.string.student_name)) },
                         singleLine = true,
                         modifier = Modifier.fillMaxWidth()
                     )
@@ -118,16 +132,23 @@ fun AttendanceReviewScreen(
                 TextButton(
                     onClick = {
                         namingCapturedId?.let { id ->
-                            viewModel.enrollCapturedFaceInSession(id, namingCapturedInput.trim(), context)
+                            viewModel.enrollCapturedFaceInSession(
+                                id,
+                                namingCapturedInput.trim(),
+                                context
+                            )
                         }
                         namingCapturedId = null
                         namingCapturedInput = ""
                     },
                     enabled = namingCapturedInput.isNotBlank()
-                ) { Text("Enroll & Mark Present") }
+                ) { Text(stringResource(R.string.enroll_mark_present)) }
             },
             dismissButton = {
-                TextButton(onClick = { namingCapturedId = null; namingCapturedInput = "" }) { Text("Skip") }
+                TextButton(onClick = {
+                    namingCapturedId = null
+                    namingCapturedInput = ""
+                }) { Text(stringResource(R.string.skip)) }
             }
         )
     }
@@ -138,11 +159,19 @@ fun AttendanceReviewScreen(
             TopAppBar(
                 title = {
                     Column {
-                        Text("Attendance Review")
-                        session?.let { s ->
-                            val dateFormat = SimpleDateFormat("MMM dd, yyyy HH:mm", Locale.getDefault())
+                        Text(stringResource(R.string.attendance_review_title))
+                        val current = session
+                        if (current != null) {
+                            val dateFormat = SimpleDateFormat(
+                                "MMM dd, yyyy HH:mm",
+                                Locale.getDefault()
+                            )
                             Text(
-                                text = "${s.className} — ${dateFormat.format(Date(s.dateMs))}",
+                                text = stringResource(
+                                    R.string.attendance_session_subtitle,
+                                    current.className,
+                                    dateFormat.format(Date(current.dateMs))
+                                ),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
                             )
@@ -151,7 +180,10 @@ fun AttendanceReviewScreen(
                 },
                 navigationIcon = {
                     IconButton(onClick = { viewModel.exitAttendance() }) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(R.string.back)
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
@@ -167,54 +199,45 @@ fun AttendanceReviewScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            if (session != null) {
-                val present = session!!.presentNames.sorted()
-                val absent = session!!.absentNames.sorted()
-                val timestamps = session!!.timestamps
+            val current = session
+            if (current != null) {
+                val present = current.presentNames.sorted()
+                val absent = current.absentNames.sorted()
+                val unsure = current.unsureNames.sorted()
+                val timestamps = current.timestamps
                 val timeFormat = remember { SimpleDateFormat("HH:mm:ss", Locale.getDefault()) }
 
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Card(
-                        modifier = Modifier.weight(1f),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = present.size.toString(),
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                            Text("Present", style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
-                    Card(
-                        modifier = Modifier.weight(1f),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(12.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally
-                        ) {
-                            Text(
-                                text = absent.size.toString(),
-                                style = MaterialTheme.typography.headlineMedium,
-                                color = MaterialTheme.colorScheme.error
-                            )
-                            Text("Absent", style = MaterialTheme.typography.labelSmall)
-                        }
-                    }
+                    SummaryCard(
+                        count = present.size,
+                        label = stringResource(R.string.attendance_present),
+                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                        contentColor = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f)
+                    )
+                    SummaryCard(
+                        count = absent.size,
+                        label = stringResource(R.string.attendance_absent),
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        contentColor = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.weight(1f)
+                    )
+                    SummaryCard(
+                        count = unsure.size,
+                        label = stringResource(R.string.attendance_unsure),
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.weight(1f)
+                    )
                 }
 
                 // Unknown faces captured during attendance
                 if (capturedFaces.isNotEmpty()) {
                     Text(
-                        text = "Unknown Faces (${capturedFaces.size}) — tap to identify",
+                        text = stringResource(R.string.attendance_unknown_faces, capturedFaces.size),
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.tertiary
                     )
@@ -228,7 +251,11 @@ fun AttendanceReviewScreen(
                                 modifier = Modifier
                                     .size(72.dp)
                                     .clip(MaterialTheme.shapes.small)
-                                    .border(2.dp, MaterialTheme.colorScheme.tertiary, MaterialTheme.shapes.small)
+                                    .border(
+                                        2.dp,
+                                        MaterialTheme.colorScheme.tertiary,
+                                        MaterialTheme.shapes.small
+                                    )
                                     .clickable {
                                         namingCapturedId = sample.id
                                         namingCapturedInput = ""
@@ -236,7 +263,7 @@ fun AttendanceReviewScreen(
                             ) {
                                 Image(
                                     bitmap = sample.bitmap.asImageBitmap(),
-                                    contentDescription = "Unknown face",
+                                    contentDescription = stringResource(R.string.attendance_unknown_face),
                                     modifier = Modifier.fillMaxSize(),
                                     contentScale = ContentScale.Crop
                                 )
@@ -246,7 +273,7 @@ fun AttendanceReviewScreen(
                                 ) {
                                     Icon(
                                         Icons.Default.Cancel,
-                                        contentDescription = "Dismiss",
+                                        contentDescription = stringResource(R.string.dismiss),
                                         modifier = Modifier.size(14.dp),
                                         tint = MaterialTheme.colorScheme.error
                                     )
@@ -257,7 +284,7 @@ fun AttendanceReviewScreen(
                 }
 
                 Text(
-                    text = "Tap a name to toggle Present/Absent",
+                    text = stringResource(R.string.attendance_toggle_hint),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                 )
@@ -266,36 +293,38 @@ fun AttendanceReviewScreen(
                 OutlinedTextField(
                     value = reviewSearch,
                     onValueChange = { reviewSearch = it },
-                    placeholder = { Text("Search students...") },
+                    placeholder = { Text(stringResource(R.string.attendance_search)) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true,
                     shape = MaterialTheme.shapes.medium
                 )
 
-                val filteredPresent = remember(present, reviewSearch) {
-                    if (reviewSearch.isBlank()) present
-                    else present.filter { it.contains(reviewSearch, ignoreCase = true) }
+                fun filter(names: List<String>): List<String> = if (reviewSearch.isBlank()) {
+                    names
+                } else {
+                    names.filter { it.contains(reviewSearch, ignoreCase = true) }
                 }
-                val filteredAbsent = remember(absent, reviewSearch) {
-                    if (reviewSearch.isBlank()) absent
-                    else absent.filter { it.contains(reviewSearch, ignoreCase = true) }
-                }
+
+                fun timeLabel(name: String): String =
+                    timestamps[name]?.let { timeFormat.format(Date(it)) } ?: ""
+
+                val filteredPresent = filter(present)
+                val filteredAbsent = filter(absent)
+                val filteredUnsure = filter(unsure)
 
                 if (filteredPresent.isNotEmpty()) {
                     Text(
-                        text = "Present (${filteredPresent.size})",
+                        text = stringResource(R.string.attendance_present_count, filteredPresent.size),
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.primary
                     )
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         items(filteredPresent, key = { it }) { name ->
                             ReviewRow(
                                 name = name,
-                                isPresent = true,
-                                timeLabel = timestamps[name]?.let { timeFormat.format(Date(it)) } ?: "",
+                                status = ReviewStatus.PRESENT,
+                                timeLabel = timeLabel(name),
                                 onToggle = { viewModel.toggleAttendanceStatus(name) }
                             )
                         }
@@ -304,18 +333,34 @@ fun AttendanceReviewScreen(
 
                 if (filteredAbsent.isNotEmpty()) {
                     Text(
-                        text = "Absent (${filteredAbsent.size})",
+                        text = stringResource(R.string.attendance_absent_count, filteredAbsent.size),
                         style = MaterialTheme.typography.titleSmall,
                         color = MaterialTheme.colorScheme.error
                     )
-                    LazyColumn(
-                        verticalArrangement = Arrangement.spacedBy(4.dp)
-                    ) {
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         items(filteredAbsent, key = { it }) { name ->
                             ReviewRow(
                                 name = name,
-                                isPresent = false,
-                                timeLabel = timestamps[name]?.let { timeFormat.format(Date(it)) } ?: "",
+                                status = ReviewStatus.ABSENT,
+                                timeLabel = timeLabel(name),
+                                onToggle = { viewModel.toggleAttendanceStatus(name) }
+                            )
+                        }
+                    }
+                }
+
+                if (filteredUnsure.isNotEmpty()) {
+                    Text(
+                        text = stringResource(R.string.attendance_unsure_count, filteredUnsure.size),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.tertiary
+                    )
+                    LazyColumn(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        items(filteredUnsure, key = { it }) { name ->
+                            ReviewRow(
+                                name = name,
+                                status = ReviewStatus.UNSURE,
+                                timeLabel = timeLabel(name),
                                 onToggle = { viewModel.toggleAttendanceStatus(name) }
                             )
                         }
@@ -326,41 +371,59 @@ fun AttendanceReviewScreen(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedButton(
-                        onClick = {
-                            pendingScope = AttendanceExporter.Scope.PRESENT_ONLY
-                            session?.let { saveLauncher.launch(AttendanceExporter.suggestedFileName(it, AttendanceExporter.Scope.PRESENT_ONLY)) }
-                        },
+                    ExportButton(
+                        label = stringResource(R.string.attendance_export_present),
+                        scope = AttendanceExporter.Scope.PRESENT_ONLY,
+                        enabled = present.isNotEmpty(),
                         modifier = Modifier.weight(1f),
-                        shape = MaterialTheme.shapes.medium,
-                        enabled = present.isNotEmpty()
-                    ) {
-                        Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.padding(end = 4.dp))
-                        Text("Present")
-                    }
-                    OutlinedButton(
-                        onClick = {
-                            pendingScope = AttendanceExporter.Scope.ABSENT_ONLY
-                            session?.let { saveLauncher.launch(AttendanceExporter.suggestedFileName(it, AttendanceExporter.Scope.ABSENT_ONLY)) }
-                        },
+                        onClick = { scope ->
+                            pendingScope = scope
+                            saveLauncher.launch(
+                                AttendanceExporter.suggestedFileName(current, scope)
+                            )
+                        }
+                    )
+                    ExportButton(
+                        label = stringResource(R.string.attendance_export_absent),
+                        scope = AttendanceExporter.Scope.ABSENT_ONLY,
+                        enabled = absent.isNotEmpty(),
                         modifier = Modifier.weight(1f),
-                        shape = MaterialTheme.shapes.medium,
-                        enabled = absent.isNotEmpty()
-                    ) {
-                        Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.padding(end = 4.dp))
-                        Text("Absent")
-                    }
-                    ElevatedButton(
-                        onClick = {
-                            pendingScope = AttendanceExporter.Scope.BOTH
-                            session?.let { saveLauncher.launch(AttendanceExporter.suggestedFileName(it, AttendanceExporter.Scope.BOTH)) }
-                        },
+                        onClick = { scope ->
+                            pendingScope = scope
+                            saveLauncher.launch(
+                                AttendanceExporter.suggestedFileName(current, scope)
+                            )
+                        }
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    ExportButton(
+                        label = stringResource(R.string.attendance_export_unsure),
+                        scope = AttendanceExporter.Scope.UNSURE_ONLY,
+                        enabled = unsure.isNotEmpty(),
                         modifier = Modifier.weight(1f),
-                        shape = MaterialTheme.shapes.medium
-                    ) {
-                        Icon(Icons.Default.FileDownload, contentDescription = null, modifier = Modifier.padding(end = 4.dp))
-                        Text("Both")
-                    }
+                        onClick = { scope ->
+                            pendingScope = scope
+                            saveLauncher.launch(
+                                AttendanceExporter.suggestedFileName(current, scope)
+                            )
+                        }
+                    )
+                    ExportButton(
+                        label = stringResource(R.string.attendance_export_all),
+                        scope = AttendanceExporter.Scope.BOTH,
+                        enabled = present.isNotEmpty() || absent.isNotEmpty() || unsure.isNotEmpty(),
+                        modifier = Modifier.weight(1f),
+                        onClick = { scope ->
+                            pendingScope = scope
+                            saveLauncher.launch(
+                                AttendanceExporter.suggestedFileName(current, scope)
+                            )
+                        }
+                    )
                 }
 
                 ElevatedButton(
@@ -368,8 +431,12 @@ fun AttendanceReviewScreen(
                     modifier = Modifier.fillMaxWidth(),
                     shape = MaterialTheme.shapes.medium
                 ) {
-                    Icon(Icons.Default.PhotoCamera, contentDescription = null, modifier = Modifier.padding(end = 4.dp))
-                    Text("Scan Late Student")
+                    Icon(
+                        Icons.Default.PhotoCamera,
+                        contentDescription = null,
+                        modifier = Modifier.padding(end = 4.dp)
+                    )
+                    Text(stringResource(R.string.attendance_scan_late))
                 }
             }
         }
@@ -377,38 +444,100 @@ fun AttendanceReviewScreen(
 }
 
 @Composable
+private fun SummaryCard(
+    count: Int,
+    label: String,
+    containerColor: androidx.compose.ui.graphics.Color,
+    contentColor: androidx.compose.ui.graphics.Color,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        modifier = modifier,
+        colors = CardDefaults.cardColors(containerColor = containerColor)
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = count.toString(),
+                style = MaterialTheme.typography.headlineMedium,
+                color = contentColor
+            )
+            Text(label, style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+@Composable
+private fun ExportButton(
+    label: String,
+    scope: AttendanceExporter.Scope,
+    enabled: Boolean,
+    modifier: Modifier = Modifier,
+    onClick: (AttendanceExporter.Scope) -> Unit
+) {
+    OutlinedButton(
+        onClick = { onClick(scope) },
+        modifier = modifier,
+        shape = MaterialTheme.shapes.medium,
+        enabled = enabled
+    ) {
+        Icon(
+            Icons.Default.FileDownload,
+            contentDescription = null,
+            modifier = Modifier.padding(end = 4.dp)
+        )
+        Text(label)
+    }
+}
+
+@Composable
 private fun ReviewRow(
     name: String,
-    isPresent: Boolean,
+    status: ReviewStatus,
     timeLabel: String,
     onToggle: () -> Unit
 ) {
+    val containerColor = when (status) {
+        ReviewStatus.PRESENT -> MaterialTheme.colorScheme.primaryContainer
+        ReviewStatus.ABSENT -> MaterialTheme.colorScheme.errorContainer
+        ReviewStatus.UNSURE -> MaterialTheme.colorScheme.tertiaryContainer
+    }
+    val contentColor = when (status) {
+        ReviewStatus.PRESENT -> MaterialTheme.colorScheme.primary
+        ReviewStatus.ABSENT -> MaterialTheme.colorScheme.error
+        ReviewStatus.UNSURE -> MaterialTheme.colorScheme.tertiary
+    }
+    val icon = when (status) {
+        ReviewStatus.PRESENT -> Icons.Default.CheckCircle
+        ReviewStatus.ABSENT -> Icons.Default.Cancel
+        ReviewStatus.UNSURE -> Icons.Default.HelpOutline
+    }
+
     Card(
         onClick = onToggle,
         modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = if (isPresent) {
-                MaterialTheme.colorScheme.primaryContainer
-            } else {
-                MaterialTheme.colorScheme.errorContainer
-            }
-        ),
+        colors = CardDefaults.cardColors(containerColor = containerColor),
         shape = MaterialTheme.shapes.small,
     ) {
         Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
             Icon(
-                imageVector = if (isPresent) Icons.Default.CheckCircle else Icons.Default.Cancel,
+                imageVector = icon,
                 contentDescription = null,
-                tint = if (isPresent) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                tint = contentColor,
                 modifier = Modifier.padding(end = 8.dp)
             )
             Column(modifier = Modifier.weight(1f)) {
                 Text(text = name, style = MaterialTheme.typography.bodyMedium)
+                Text(
+                    text = stringResource(status.labelRes),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = contentColor
+                )
                 if (timeLabel.isNotEmpty()) {
                     Text(
                         text = timeLabel,
@@ -420,7 +549,7 @@ private fun ReviewRow(
             IconButton(onClick = onToggle) {
                 Icon(
                     Icons.Default.SwapHoriz,
-                    contentDescription = "Toggle",
+                    contentDescription = stringResource(R.string.toggle),
                     tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                 )
             }

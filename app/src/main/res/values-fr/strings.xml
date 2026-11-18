@@ -44,4 +44,30 @@
     <string name="recognition_threshold_hint">Plus bas = plus strict (moins de faux positifs). Plus haut = plus permissif.</string>
     <string name="min_face_size_label">Taille minimale du visage : 15 %</string>
     <string name="min_face_size_hint">Les visages plus petits sont ignorés.</string>
+
+    <!-- Attendance review -->
+    <string name="attendance_review_title">Suivi des présences</string>
+    <string name="attendance_session_subtitle">%1$s — %2$s</string>
+    <string name="attendance_present">Présent</string>
+    <string name="attendance_absent">Absent</string>
+    <string name="attendance_unsure">INCERTAIN</string>
+    <string name="attendance_unsure_count">Incertains (%1$d)</string>
+    <string name="attendance_unknown_faces">Visages inconnus (%1$d) — touchez pour identifier</string>
+    <string name="attendance_unknown_face">Visage inconnu</string>
+    <string name="attendance_toggle_hint">Touchez un nom pour changer Présent / Absent / INCERTAIN</string>
+    <string name="attendance_search">Rechercher des étudiants...</string>
+    <string name="attendance_present_count">Présents (%1$d)</string>
+    <string name="attendance_absent_count">Absents (%1$d)</string>
+    <string name="attendance_export_present">Présents</string>
+    <string name="attendance_export_absent">Absents</string>
+    <string name="attendance_export_unsure">Incertains</string>
+    <string name="attendance_export_all">Tous</string>
+    <string name="attendance_scan_late">Scanner un étudiant en retard</string>
+    <string name="attendance_saved">Enregistré</string>
+    <string name="attendance_save_failed">Échec de l\'enregistrement</string>
+    <string name="student_name">Nom de l\'étudiant</string>
+    <string name="enroll_mark_present">Enregistrer et marquer présent</string>
+    <string name="back">Retour</string>
+    <string name="dismiss">Ignorer</string>
+    <string name="toggle">Changer</string>
 </resources>

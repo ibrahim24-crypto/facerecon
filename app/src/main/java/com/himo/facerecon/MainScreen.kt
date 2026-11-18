@@ -936,7 +936,7 @@ private fun processFrame(
                                 val embedding = faceRecognitionHelper.getEmbedding(faceBitmap)
                                 val result = viewModel.recognizeFace(embedding)
                                 val faceId = FaceData.stableId(bounds)
-                                val stableName = viewModel.stabilizeRecognition(faceId, result)
+                                val stableName = viewModel.stabilizeRecognition(faceId, result).name
 
                                 if (stableName == "Unknown") {
                                     faceList.add(
@@ -1008,9 +1008,12 @@ private fun processFrame(
                                 val embedding = faceRecognitionHelper.getEmbedding(faceBitmap)
                                 val result = viewModel.recognizeFace(embedding)
                                 val faceId = FaceData.stableId(bounds)
-                                val stableName = viewModel.stabilizeRecognition(faceId, result)
+                                val decision = viewModel.stabilizeRecognition(faceId, result)
+                                val stableName = decision.name
 
-                                if (stableName != "Unknown") {
+                                if (decision.unsure && stableName != "Unknown") {
+                                    viewModel.markAttendanceUnsure(stableName)
+                                } else if (stableName != "Unknown") {
                                     viewModel.markAttendanceRecognized(stableName)
                                 }
 
@@ -1019,7 +1022,8 @@ private fun processFrame(
                                         bounds = bounds,
                                         name = stableName,
                                         id = faceId,
-                                        confidence = result.bestDistance
+                                        confidence = result.bestDistance,
+                                        unsure = decision.unsure
                                     )
                                 )
 
@@ -1208,7 +1212,7 @@ private fun processPickedImage(
                         val embedding = faceRecognitionHelper.getEmbedding(faceBitmap)
                         val result = viewModel.recognizeFace(embedding)
                         val faceId = FaceData.stableId(bounds)
-                        val stableName = viewModel.stabilizeRecognition(faceId, result)
+                        val stableName = viewModel.stabilizeRecognition(faceId, result).name
 
                         if (stableName == "Unknown") {
                             faceList.add(
